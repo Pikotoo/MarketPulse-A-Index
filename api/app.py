@@ -1,5 +1,5 @@
 """
-MarketPulse — A股市场信号指标 API v2.1
+MarketPulse-A-Index — A股市场信号指标 API v2.1
 
 基于公开市场数据深度加工的量化指标计算服务
 卖算法不卖数据、卖指标不卖行情、做加工者不做搬运工
@@ -58,7 +58,7 @@ MarketPulse — A股市场信号指标 API v2.1
 import sys
 from pathlib import Path
 
-# MarketPulse 项目根
+# MarketPulse-A-Index 项目根
 _MP_ROOT = Path(__file__).parent.parent
 if str(_MP_ROOT) not in sys.path:
     sys.path.insert(0, str(_MP_ROOT))
@@ -212,7 +212,7 @@ def health():
         freshness["sector_data"] = {"status": "unavailable"}
 
     return api_response({
-        "service": "MarketPulse",
+        "service": "MarketPulse-A-Index",
         "version": API_VERSION,
         "status": "running",
         "uptime": "active",
@@ -224,7 +224,7 @@ def health():
 def endpoints():
     """列出所有可用端点"""
     return api_response({
-        "description": "MarketPulse API — A股市场信号指标",
+        "description": "MarketPulse-A-Index API — A股市场信号指标",
         "authentication": "X-API-Key 请求头",
         "history_support": "所有信号端点支持 ?days=N (N≤365) 返回历史序列",
         "endpoints": [
@@ -311,7 +311,7 @@ def ai_chat():
         question = data.get("question", "")
         ctx = data.get("context", {})
         system_prompt = (
-            "你是MarketPulse数据助手。只解释数据含义，绝不给出投资建议。"
+            "你是MarketPulse-A-Index数据助手。只解释数据含义，绝不给出投资建议。"
             f"当前数据: 综合情绪={ctx.get('composite','?')}/100, "
             f"PE分位={ctx.get('pePct','?')}%, "
             f"市场状态={ctx.get('regime','?')}。"
@@ -322,7 +322,7 @@ def ai_chat():
             "https://api.deepseek.com/v1/chat/completions",
             headers={
                 "Authorization": f"Bearer {api_key}",
-                "User-Agent": "MarketPulse/2.1"
+                "User-Agent": "MarketPulse-A-Index/2.1"
             },
             json={
                 "model": "deepseek-chat",
@@ -804,7 +804,7 @@ def server_error(e):
 
 if __name__ == "__main__":
     print("=" * 60)
-    print(f"  MarketPulse API v{API_VERSION}")
+    print(f"  MarketPulse-A-Index API v{API_VERSION}")
     print(f"  :{API_PORT}")
     print()
     print("  ( X-API-Key):")

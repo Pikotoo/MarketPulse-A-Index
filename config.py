@@ -1,5 +1,5 @@
 """
-MarketPulse 配置
+MarketPulse-A-Index 配置
 基于公开市场数据深度加工的量化指标计算服务
 
 所有参数可通过 .env 文件或环境变量覆盖
@@ -25,7 +25,7 @@ DATA_ROOT = _resolve_data_root()
 MACRO_DATA_DIR = DATA_ROOT / "宏观数据"
 PE_CACHE_PATH = DATA_ROOT / "csi300_pe.parquet"
 
-# MarketPulse 数据目录（SQLite、日志等）
+# MarketPulse-A-Index 数据目录（SQLite、日志等）
 DATA_DIR = PROJECT_ROOT / "data"
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "marketpulse.db"

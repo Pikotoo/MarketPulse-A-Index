@@ -1,1 +1,1 @@
-"""MarketPulse API 包"""
+"""MarketPulse-A-Index API 包"""

@@ -1,5 +1,5 @@
 """
-MarketPulse 共享工具函数
+MarketPulse-A-Index 共享工具函数
 
 消除各信号模块之间的代码重复：
   - _norm / _rnorm: 线性归一化（10+ 处重复）

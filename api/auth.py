@@ -10,7 +10,7 @@ API Key 认证系统 — 多用户、分级限速、用量统计
 import sys
 from pathlib import Path
 
-# 确保 MarketPulse 的 config 优先被导入
+# 确保 MarketPulse-A-Index 的 config 优先被导入
 _MP_ROOT = Path(__file__).parent.parent
 if str(_MP_ROOT) not in sys.path:
     sys.path.insert(0, str(_MP_ROOT))

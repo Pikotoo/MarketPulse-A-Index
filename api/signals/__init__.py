@@ -1,1 +1,1 @@
-"""MarketPulse 信号模块"""
+"""MarketPulse-A-Index 信号模块"""

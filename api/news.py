@@ -54,31 +54,26 @@ BEARISH_KEYWORDS = [
 # ═══════════════════════════════════════════
 RSS_FEEDS = [
     {
-        "name": "Reuters Business",
-        "url": "https://www.reutersagency.com/feed/",
-        "category": "国际市场",
+        "name": "36氪",
+        "url": "https://36kr.com/feed",
+        "category": "科技财经",
         "enabled": True,
     },
     {
-        "name": "CNBC Top News",
-        "url": "https://www.cnbc.com/id/100003114/device/rss/rss.html",
-        "category": "国际市场",
-        "enabled": True,
+        "name": "财联社电报",
+        "url": "https://www.cls.cn/telegraph",
+        "category": "A股",
+        "enabled": False,  # HTML页面，需专用解析器，暂禁用
     },
     {
-        "name": "人民网财经",
-        "url": "http://finance.people.com.cn/rss/finance.xml",
-        "category": "国内财经",
-        "enabled": True,
-    },
-    {
-        "name": "新华网财经",
-        "url": "http://www.xinhuanet.com/finance/rss.xml",
-        "category": "国内财经",
-        "enabled": True,
+        "name": "华尔街见闻",
+        "url": "https://wallstreetcn.com/news/global",
+        "category": "宏观",
+        "enabled": False,  # 需JS渲染，暂禁用
     },
     # 更多 RSS 源可在下面添加。格式：
     # {"name": "源名称", "url": "RSS地址", "category": "分类", "enabled": True},
+    # 注意：国内财经网站大多已停止提供 RSS，可通过 scripts/update_news.py 手动更新
 ]
 
 
@@ -261,11 +256,11 @@ def fetch_rss_feed(feed_url: str, source_name: str, category: str = "",
         ssl_context = None
 
     try:
-        feed = feedparser.parse(feed_url, agent="MarketPulse/2.1 RSS Reader")
+        feed = feedparser.parse(feed_url, agent="MarketPulse-A-Index/2.1 RSS Reader")
     except Exception:
         # Retry with SSL context
         try:
-            feed = feedparser.parse(feed_url, agent="MarketPulse/2.1 RSS Reader")
+            feed = feedparser.parse(feed_url, agent="MarketPulse-A-Index/2.1 RSS Reader")
         except Exception as e:
             _log.warning(f"RSS parse failed for {source_name}: {e}")
             return []

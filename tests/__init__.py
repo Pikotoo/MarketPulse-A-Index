@@ -1,1 +1,1 @@
-"""MarketPulse 测试套件"""
+"""MarketPulse-A-Index 测试套件"""
