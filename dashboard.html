@@ -15,7 +15,7 @@ body{background:#0f1119;color:#c9d1d9;font:13px/1.5 -apple-system,'Microsoft YaH
 .hdr{display:flex;align-items:baseline;gap:10px;margin-bottom:20px}
 .hdr h1{font-size:20px;font-weight:700;color:#e6e8ed;letter-spacing:-.5px}
 .hdr h1 span{color:#5b8def}
-.hdr .tag{font-size:11px;color:#555;font-weight:400}
+.hdr .tag{font-size:12px;color:#555;font-weight:400}
 .hdr .t{margin-left:auto;font:12px 'Cascadia Code','JetBrains Mono','Consolas',monospace;color:#555}
 
 /* ── Hero 仪表盘 ── */
@@ -28,7 +28,7 @@ body{background:#0f1119;color:#c9d1d9;font:13px/1.5 -apple-system,'Microsoft YaH
 .hero-sub{font-size:10px;color:#555;margin-top:2px}
 .hero-info{flex:1;min-width:0}
 .hero-label{font-size:15px;font-weight:600;color:#e6e8ed;margin-bottom:4px}
-.hero-meta{font-size:11px;color:#666;margin-bottom:14px}
+.hero-meta{font-size:12px;color:#666;margin-bottom:14px}
 .hero-meta b{color:#c9d1d9;font-weight:500}
 /* 渐变条 */
 .hero-bar-wrap{position:relative;margin-bottom:4px}
@@ -67,7 +67,7 @@ body{background:#0f1119;color:#c9d1d9;font:13px/1.5 -apple-system,'Microsoft YaH
 .cd{background:#161822;border:1px solid #1e2130;border-radius:8px;padding:18px 20px;transition:border-color .2s}
 .cd:hover{border-color:#2a2d3a}
 .cd-h{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
-.cd-t{font-size:11px;color:#8b8fa3;font-weight:500}
+.cd-t{font-size:12px;color:#8b8fa3;font-weight:500}
 .cd-b{font-size:9px;padding:2px 8px;border-radius:3px;font-weight:500}
 .cd-v{font:30px/1.1 'Cascadia Code','JetBrains Mono','Consolas',monospace;font-weight:700;letter-spacing:-1px;margin-bottom:4px}
 .cd-d{font-size:10px;color:#555;line-height:1.6}
@@ -205,7 +205,18 @@ body{background:#0f1119;color:#c9d1d9;font:13px/1.5 -apple-system,'Microsoft YaH
 
 <!-- 相似期 + 新闻 -->
 <div class="ch" id="simBox"><div class="ct">📊 历史相似期 · 当前综合情绪最接近的 5 天</div><div id="simList" style="color:#8b8fa3;padding:4px 0"></div></div>
-<div class="ch" id="newsBox"><div class="ct">📰 市场要闻</div><div id="newsList" style="color:#8b8fa3;padding:4px 0"></div></div>
+<div class="ch" id="newsBox">
+  <div class="ct" style="display:flex;align-items:center;gap:10px">
+    <span>📰 市场要闻</span>
+    <span style="font-size:10px;color:#444;display:flex;gap:4px">
+      <a href="#" onclick="filterNews('all');return false" style="color:#888;text-decoration:none" id="newsFilterAll">全部</a>
+      <a href="#" onclick="filterNews('利好');return false" style="color:#10b981;text-decoration:none" id="newsFilterBull">利好</a>
+      <a href="#" onclick="filterNews('利空');return false" style="color:#e55050;text-decoration:none" id="newsFilterBear">利空</a>
+      <a href="#" onclick="filterNews('中性');return false" style="color:#888;text-decoration:none" id="newsFilterNeutral">中性</a>
+    </span>
+  </div>
+  <div id="newsList" style="color:#8b8fa3;padding:4px 0"></div>
+</div>
 
 <!-- 图表 -->
 <div class="ch"><div class="ct">PE 分位 · 综合情绪 · 行业宽度 · 宏观评分 · 近半年</div><div class="cc" id="ch1" style="height:320px"></div></div>
@@ -224,6 +235,7 @@ body{background:#0f1119;color:#c9d1d9;font:13px/1.5 -apple-system,'Microsoft YaH
     <span style="margin-left:12px">🔵=进攻型</span><span>🛡️=防御型</span><span>⚪=其他</span>
   </div>
 </div>
+<div class="ch" style="height:260px" id="heatmapChart"></div>
 <div class="grid" id="sectorGrid"></div>
 
 <!-- 宏观日历 -->
@@ -236,7 +248,7 @@ body{background:#0f1119;color:#c9d1d9;font:13px/1.5 -apple-system,'Microsoft YaH
     <input id="peInput" type="number" step="0.1" min="5" max="50" placeholder="输入PE值，如 12.5" style="flex:1;background:#0f1119;border:1px solid #1e2130;border-radius:6px;padding:8px 12px;color:#c9d1d9;font-size:13px;font-family:inherit;outline:none;max-width:200px" onkeydown="if(event.key==='Enter')calcPE()">
     <button onclick="calcPE()" style="background:#5b8def;color:#fff;border:none;border-radius:6px;padding:8px 16px;font-size:12px;cursor:pointer;font-family:inherit">计算</button>
   </div>
-  <div id="peCalcResult" style="margin-top:8px;font-size:11px;color:#555;display:none"></div>
+  <div id="peCalcResult" style="margin-top:8px;font-size:12px;color:#555;display:none"></div>
 </div>
 
 <div class="ch" id="calBox"><div class="ct">📅 宏观经济日历 · 未来30天</div><div id="calList" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 12px;font-size:10px;color:#8b8fa3;padding:8px 0"></div></div>
@@ -262,8 +274,9 @@ body{background:#0f1119;color:#c9d1d9;font:13px/1.5 -apple-system,'Microsoft YaH
 </div>
 
 <script>
-var API='http://localhost:8898',KEY='mp-172fd3980ef705a21b192cb3e23c7dfc';
-async function get(p){var r=await fetch(API+p,{headers:{'X-API-Key':KEY}});if(!r.ok)throw Error('HTTP '+r.status);return(await r.json()).data}
+var API='http://localhost:8898',KEY='';
+async function initKey(){try{var r=await fetch(API+'/api/v1/dashboard-key');KEY=(await r.json()).key}catch(e){console.warn('Key fetch failed, retry...');await new Promise(function(ok){setTimeout(ok,2000)});return initKey()}}
+async function get(p){if(!KEY)await initKey();var r=await fetch(API+p,{headers:{'X-API-Key':KEY}});if(!r.ok)throw Error('HTTP '+r.status);return(await r.json()).data}
 function clr(v,l,h){if(v==null)return'b';if(v>=h)return'r';if(v<=l)return'g';return'y'}
 var c1=null;try{c1=echarts.init(document.getElementById('ch1'))}catch(e){console.warn('ECharts init failed:',e)}
 function mkChart(dom,series){if(!dom)return;
@@ -304,6 +317,26 @@ function hideLoading(){
   var lo=document.getElementById('loadingOverlay');
   if(lo){lo.style.opacity='0';lo.style.transition='opacity .3s';setTimeout(function(){if(lo.parentNode)lo.parentNode.removeChild(lo)},400)}
 }
+var newsFilter='all';
+function filterNews(f){
+  newsFilter=f;
+  var links=document.querySelectorAll('#newsBox .ct a');
+  links.forEach(function(l){l.style.fontWeight=l.textContent===f||(f==='all'&&l.textContent==='全部')?'700':'400'});
+  renderNews();
+}
+async function renderNews(){
+  var url='/api/v1/news/latest?limit=15';
+  if(newsFilter!=='all')url+='&sentiment='+newsFilter;
+  try{
+    var news=await get(url),nHTML='';
+    var srcColors={'证监会':'#e55050','央行':'#f0a030','统计局':'#5b8def','国务院':'#e55050','市场动态':'#10b981','产业资讯':'#5b8def','券商中国':'#5b8def','证券时报':'#5b8def','第一财经':'#f0a030','上海证券报':'#5b8def','中国证券报':'#5b8def','新华社':'#e55050','环球市场播报':'#888','每日经济新闻':'#f0a030'};
+    var sentColors={'利好':'#10b981','利空':'#e55050','中性':'#888'},sentEmoji={'利好':'🟢','利空':'🔴','中性':'⚪'};
+    (news.articles||[]).forEach(function(a){
+      var sc=srcColors[a.source]||'#555',sent=a.sentiment||'中性',sCol=sentColors[sent]||'#888',sEm=sentEmoji[sent]||'';
+      nHTML+='<div style="display:flex;align-items:baseline;gap:10px;padding:4px 0;border-bottom:1px solid #12141e"><span style="font-size:9px;color:'+sCol+';white-space:nowrap;font-weight:600;min-width:32px">'+sEm+sent+'</span>'+'<span style="font-size:9px;color:'+sc+';white-space:nowrap;font-weight:500;min-width:72px;max-width:90px;overflow:hidden;text-overflow:ellipsis">'+a.source+'</span>'+'<a href="'+a.url+'" target="_blank" style="color:#8b8fa3;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;font-size:12px" title="'+a.title.replace(/"/g,'&quot;')+'">'+a.title+'</a>'+'<span style="font-size:9px;color:#444;white-space:nowrap">'+(a.published||'').slice(5,10)+'</span></div>'});document.getElementById('newsList').innerHTML=nHTML||'<span style="color:#555">暂无新闻</span>';
+  }catch(ex){document.getElementById('newsBox').style.display='none'}
+}
+
 async function render(){
   document.getElementById('clock').textContent=('0'+new Date().getHours()).slice(-2)+':'+('0'+new Date().getMinutes()).slice(-2);
   try{var pe=await get('/api/v1/signal/pe-percentile'),erp=await get('/api/v1/signal/erp'),mac=await get('/api/v1/signal/macro-score'),
@@ -320,7 +353,7 @@ async function render(){
     crowd=await get('/api/v1/signal/sector-crowding');
     updateAiCtx(comp,pe,pan,reg,mac,vol,nb,margin)
   }catch(e){
-    document.getElementById('hero').innerHTML='<div style="text-align:center;padding:40px"><div style="color:#e55050;font-size:15px;font-weight:600">无法连接 API</div><div style="font-size:11px;color:#555;margin-top:6px">请确认已启动服务</div></div>';
+    document.getElementById('hero').innerHTML='<div style="text-align:center;padding:40px"><div style="color:#e55050;font-size:15px;font-weight:600">无法连接 API</div><div style="font-size:12px;color:#555;margin-top:6px">请确认已启动服务</div></div>';
     hideLoading();
     return
   }
@@ -351,12 +384,12 @@ async function render(){
         '<div class="hero-minis">'+
           '<div class="hero-mini" data-tip="当前市盈率在过去5年中的百分位。分位越高=越贵，低于20%=低估，高于80%=高估">'+
             '<div class="ml">估值温度</div>'+
-            '<div class="mv '+clr(pe.percentile,35,65)+'" style="color:'+gaugeColor(pe.percentile)+'">'+pe.percentile+'<span style="font-size:11px;font-weight:400">%</span></div>'+
+            '<div class="mv '+clr(pe.percentile,35,65)+'" style="color:'+gaugeColor(pe.percentile)+'">'+pe.percentile+'<span style="font-size:12px;font-weight:400">%</span></div>'+
             '<div class="ms">PE '+pe.value+' · '+pe.interpretation+'</div>'+
           '</div>'+
           '<div class="hero-mini" data-tip="M2增速/PMI/CPI/隔夜利率/期限利差/汇率 6维归一化等权合成。高于50=宏观偏暖">'+
             '<div class="ml">宏观环境</div>'+
-            '<div class="mv" style="color:'+(mac.value>55?'#10b981':mac.value>40?'#f0a030':'#e55050')+'">'+mac.value+'<span style="font-size:11px;font-weight:400;color:#555">/100</span></div>'+
+            '<div class="mv" style="color:'+(mac.value>55?'#10b981':mac.value>40?'#f0a030':'#e55050')+'">'+mac.value+'<span style="font-size:12px;font-weight:400;color:#555">/100</span></div>'+
             '<div class="ms">'+mac.interpretation+'</div>'+
           '</div>'+
           '<div class="hero-mini" data-tip="综合行业波动率+板块离散度+行业宽度。越高越恐慌，80+通常对应市场底部">'+
@@ -366,7 +399,7 @@ async function render(){
           '</div>'+
           '<div class="hero-mini" data-tip="股权风险溢价(ERP)=1/PE−国债收益率。正值=股票相对债券便宜，>3%意味着显著低估">'+
             '<div class="ml">股债性价比</div>'+
-            '<div class="mv '+(erp.value>3?'g':erp.value>1?'y':'r')+'">'+erp.value+'<span style="font-size:11px;font-weight:400">%</span></div>'+
+            '<div class="mv '+(erp.value>3?'g':erp.value>1?'y':'r')+'">'+erp.value+'<span style="font-size:12px;font-weight:400">%</span></div>'+
             '<div class="ms">'+erp.earnings_yield+'% - '+erp.bond_yield_10y+'%</div>'+
           '</div>'+
         '</div>'+
@@ -426,9 +459,30 @@ async function render(){
     var sectors=await get('/api/v1/signal/sector-heatmap');
     renderSectorHeatmap(sectors);
     // 行业明细
+    var secs=(sectors.sectors||[]).sort(function(a,b){return b.momentum_60d-a.momentum_60d});
+    var hmData=[],hmX=[],hmMax=0,hmMin=0;
+    secs.forEach(function(s,i){
+      var v=s.momentum_60d; hmMax=Math.max(hmMax,v); hmMin=Math.min(hmMin,v);
+      hmX.push(s.name);
+      hmData.push([i,0,v]);
+    });
+    var hmDom=document.getElementById('heatmapChart');
+    if(hmDom){
+      var hmChart=echarts.init(hmDom);
+      hmChart.setOption({
+        tooltip:{formatter:function(p){var s=secs[p.data[0]];return s.name+'<br/>60日动量: <b>'+(s.momentum_60d>0?'+':'')+s.momentum_60d.toFixed(1)+'%</b><br/>'+(s.is_defensive?'🛡️防御':s.is_offensive?'🔵进攻':'⚪其他')+(s.above_ma60?' · 站上MA60':'')}},
+        grid:{top:4,right:60,bottom:100,left:70},
+        xAxis:{type:'category',data:hmX,axisLabel:{rotate:45,fontSize:9,color:'#888'},axisTick:{show:false}},
+        yAxis:{type:'category',data:[''],axisLabel:{fontSize:10,color:'#888'}},
+        visualMap:{min:hmMin,max:hmMax,calculable:false,orient:'vertical',right:4,top:'center',
+          inRange:{color:['#e55050','#2a1a1a','#1a1a2a','#1a2a1a','#10b981']}},
+        series:[{type:'heatmap',data:hmData,label:{show:true,fontSize:9,formatter:function(p){return p.data[2].toFixed(0)+'%'}}}]
+      });
+      window.addEventListener('resize',function(){hmChart.resize()});
+    }
     var sHTML='';
     var groups={defensive:[],offensive:[],neutral:[]};
-    (sectors.sectors||[]).forEach(function(s){
+    secs.forEach(function(s){
       var g=s.is_defensive?'defensive':s.is_offensive?'offensive':'neutral';
       groups[g].push(s);
     });
@@ -440,7 +494,7 @@ async function render(){
       sHTML+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;margin-top:4px">';
       items.forEach(function(s){
         var c=s.momentum_60d>5?'#10b981':s.momentum_60d>0?'#5b8def':s.momentum_60d>-5?'#f0a030':'#e55050';
-        var arrow=s.momentum_60d>=0?"↑":"↓";
+        var arrow=s.momentum_60d>=0?'↑':'↓';
         sHTML+='<div style="font-size:10px;display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #1a1c28"><span style="color:#999">'+s.name+'</span><span style="font-family:Cascadia Code,Consolas,monospace;color:'+c+';font-size:10px">'+arrow+' '+Math.abs(s.momentum_60d).toFixed(1)+'%</span></div>';
       });
       sHTML+='</div></div>';
@@ -500,10 +554,7 @@ async function render(){
   }catch(ex){document.getElementById('simBox').style.display='none'}
 
   // 新闻
-  try{var news=await get('/api/v1/news/latest?limit=10'),nHTML='';var srcColors={'证监会':'#e55050','央行':'#f0a030','统计局':'#5b8def','国务院':'#e55050','市场动态':'#10b981','产业资讯':'#5b8def'};
-    (news.articles||[]).forEach(function(a){var sc=srcColors[a.source]||'#555';
-      nHTML+='<div style="display:flex;align-items:baseline;gap:8px;padding:2px 0"><span style="font-size:9px;color:'+sc+';white-space:nowrap;font-weight:500">'+a.source+'</span><a href="'+a.url+'" target="_blank" style="color:#8b8fa3;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1" title="'+a.title.replace(/"/g,'&quot;')+'">'+a.title+'</a><span style="font-size:9px;color:#444;white-space:nowrap">'+(a.published||'').slice(0,10)+'</span></div>'});document.getElementById('newsList').innerHTML=nHTML||'<span style="color:#555">暂无新闻</span>';
-  }catch(ex){document.getElementById('newsBox').style.display='none'}
+  await renderNews();
   hideLoading();
 }
 
@@ -586,6 +637,7 @@ function toggleChat(){
   p.classList.toggle('open');b.classList.toggle('hidden',p.classList.contains('open'));
   if(p.classList.contains('open')){document.getElementById('aiInput').focus()}
 }
+
 async function sendChat(){
   if(aiBusy)return;
   var inp=document.getElementById('aiInput'),q=inp.value.trim();

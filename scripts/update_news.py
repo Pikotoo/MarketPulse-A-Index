@@ -127,12 +127,32 @@ def cmd_rss():
     print(f"  缓存总数: {result['total_cached']} 条")
 
 
+def cmd_sina(num: int = 20):
+    """从新浪财经 7×24 滚动新闻抓取"""
+    from api.news import refresh_from_sina
+    result = refresh_from_sina(num=num)
+    print(f"新浪7x24 刷新完成:")
+    print(f"  新增: {result['added']} 条")
+    print(f"  跳过(重复): {result['skipped']} 条")
+    if result.get("errors"):
+        for e in result["errors"]:
+            print(f"    - {e}")
+    print(f"  缓存总数: {result['total_cached']} 条")
+
+    # 显示情绪分布
+    from api.news import news_stats
+    stats = news_stats()
+    s = stats["by_sentiment"]
+    print(f"  情绪分布: 🟢利好{s.get('利好',0)} 🔴利空{s.get('利空',0)} ⚪中性{s.get('中性',0)}")
+
+
 if __name__ == "__main__":
     import argparse
     p = argparse.ArgumentParser(description="MarketPulse 新闻更新")
     p.add_argument("--seed", action="store_true", help="写入种子数据")
     p.add_argument("--add", nargs="?", const=True, help="从 JSON 文件添加新闻")
     p.add_argument("--rss", action="store_true", help="从 RSS 源抓取新闻")
+    p.add_argument("--sina", type=int, nargs="?", const=20, help="从新浪7x24抓取（默认20条）")
     p.add_argument("--stats", action="store_true", help="查看缓存统计")
     args = p.parse_args()
 
@@ -142,6 +162,8 @@ if __name__ == "__main__":
         cmd_add(args.add if isinstance(args.add, str) else None)
     elif args.rss:
         cmd_rss()
+    elif args.sina is not None:
+        cmd_sina(num=args.sina)
     elif args.stats:
         cmd_stats()
     else:

@@ -374,3 +374,135 @@ def refresh_from_rss() -> dict:
         "total_cached": len(cache["articles"]),
         "message": f"新增 {added} 条，跳过 {skipped} 条重复",
     }
+
+
+# ═══════════════════════════════════════════
+# 新浪财经 7×24 滚动新闻抓取器
+# ═══════════════════════════════════════════
+SINA_ROLL_API = "https://feed.mix.sina.com.cn/api/roll/get"
+SINA_LID_A_SHARE = 2509  # A股+全球财经混合频道
+
+
+def fetch_sina_7x24(lid: int = SINA_LID_A_SHARE, num: int = 30,
+                    timeout: int = 15) -> list[dict]:
+    """
+    从新浪财经 7×24 滚动新闻 API 抓取最新新闻
+
+    Args:
+        lid: 频道ID，2509=A股+全球财经
+        num: 抓取条数
+        timeout: 超时秒数
+
+    Returns:
+        list of {title, source, url, category, published}
+    """
+    import requests
+
+    params = {
+        "pageid": 153,
+        "lid": lid,
+        "k": "",
+        "num": min(num, 100),
+        "page": 1,
+    }
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://finance.sina.com.cn/",
+    }
+
+    try:
+        resp = requests.get(SINA_ROLL_API, params=params, headers=headers,
+                           timeout=timeout)
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as e:
+        _log.error(f"新浪7x24 API请求失败: {e}")
+        return []
+
+    if data.get("result", {}).get("status", {}).get("code") != 0:
+        _log.error(f"新浪7x24 API返回错误: {data.get('result', {}).get('status', {})}")
+        return []
+
+    articles = []
+    for item in data.get("result", {}).get("data", []):
+        title = item.get("title", "").strip()
+        if not title:
+            continue
+
+        url = item.get("url", "")
+        if not url:
+            continue
+
+        # 转换 Unix 时间戳
+        ctime = item.get("ctime", "")
+        try:
+            from datetime import datetime as dt
+            published = dt.fromtimestamp(int(ctime)).strftime("%Y-%m-%d %H:%M")
+        except (ValueError, TypeError, OSError):
+            published = dt.now().strftime("%Y-%m-%d %H:%M")
+
+        source = item.get("media_name", "新浪财经")
+        intro = item.get("intro", "")
+
+        # 分类
+        sentiment = classify_sentiment(title + " " + intro[:100])
+
+        articles.append({
+            "title": title[:200],
+            "source": source,
+            "url": url,
+            "category": "A股",
+            "published": published,
+            "sentiment": sentiment,
+        })
+
+    return articles
+
+
+def refresh_from_sina(lid: int = SINA_LID_A_SHARE, num: int = 30) -> dict:
+    """
+    从新浪财经抓取 → 分类 → 写入缓存
+
+    Returns:
+        {added, skipped, sources_scanned, total_cached, message}
+    """
+    articles = fetch_sina_7x24(lid=lid, num=num)
+    if not articles:
+        return {
+            "added": 0, "skipped": 0, "sources_scanned": 1,
+            "total_cached": 0, "message": "新浪7x24 API抓取失败",
+        }
+
+    cache = _read_cache()
+    existing_urls = {a["url"] for a in cache["articles"]}
+    added = 0
+    skipped = 0
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+
+    for a in articles:
+        if a["url"] in existing_urls:
+            skipped += 1
+            continue
+        cache["articles"].insert(0, {
+            "title": a["title"],
+            "source": a["source"],
+            "category": a.get("category", ""),
+            "url": a["url"],
+            "published": a["published"],
+            "added_at": now,
+            "sentiment": a.get("sentiment", classify_sentiment(a["title"])),
+        })
+        existing_urls.add(a["url"])
+        added += 1
+
+    cache["articles"] = cache["articles"][:500]
+    cache["updated"] = now
+    _write_cache(cache)
+
+    return {
+        "added": added,
+        "skipped": skipped,
+        "sources_scanned": 1,
+        "total_cached": len(cache["articles"]),
+        "message": f"新浪7x24: 新增 {added} 条，跳过 {skipped} 条重复",
+    }

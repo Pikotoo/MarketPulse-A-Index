@@ -119,6 +119,22 @@ with app.app_context():
     init_audit_db()
     init_cache_db()
 
+    # 确保 DASHBOARD_KEY 在数据库中（仪表盘自动获取）
+    try:
+        import hashlib
+        from config import DASHBOARD_KEY, DB_PATH
+        import sqlite3
+        h = hashlib.sha256(DASHBOARD_KEY.encode()).hexdigest()
+        conn = sqlite3.connect(str(DB_PATH))
+        conn.execute(
+            "INSERT OR IGNORE INTO api_keys (key_hash, email, tier, name) VALUES (?, 'dashboard', 'pro', 'dashboard-auto')",
+            (h,)
+        )
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
+
 
 # ── 辅助函数 ─────────────────────────────────────────────
 
@@ -781,11 +797,12 @@ def tool_similar_period():
 @require_api_key
 @signal_endpoint
 def news_latest():
-    """最新新闻 — 本地缓存"""
+    """最新新闻 — 本地缓存，支持情绪筛选(利好/利空/中性)"""
     from api.news import get_latest_news
     category = request.args.get("category")
+    sentiment = request.args.get("sentiment")  # 利好 | 利空 | 中性
     limit = min(request.args.get("limit", 15, type=int), 30)
-    articles = get_latest_news(limit=limit, category=category)
+    articles = get_latest_news(limit=limit, category=category, sentiment=sentiment)
     return {
         "indicator": "news",
         "count": len(articles),
@@ -799,9 +816,19 @@ def news_latest():
 @require_api_key
 @signal_endpoint
 def news_refresh():
-    """刷新新闻 — 从RSS源抓取最新内容"""
-    from api.news import refresh_from_rss, news_stats
-    result = refresh_from_rss()
+    """刷新新闻 — 从新浪7x24 + RSS源抓取最新内容"""
+    from api.news import refresh_from_sina, refresh_from_rss, news_stats
+
+    source = request.args.get("source", "sina")  # sina | rss | all
+    result = {}
+
+    if source in ("sina", "all"):
+        sina_result = refresh_from_sina(num=int(request.args.get("num", 20)))
+        result["sina"] = sina_result
+    if source in ("rss", "all"):
+        rss_result = refresh_from_rss()
+        result["rss"] = rss_result
+
     result["stats"] = news_stats()
     return result
 
