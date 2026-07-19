@@ -262,7 +262,7 @@ body{background:#0f1119;color:#c9d1d9;font:13px/1.5 -apple-system,'Microsoft YaH
 </div>
 
 <script>
-var API='http://localhost:8898',KEY='mp-806fac606a6e1ce607ce158175087ca9';
+var API='http://localhost:8898',KEY='mp-172fd3980ef705a21b192cb3e23c7dfc';
 async function get(p){var r=await fetch(API+p,{headers:{'X-API-Key':KEY}});if(!r.ok)throw Error('HTTP '+r.status);return(await r.json()).data}
 function clr(v,l,h){if(v==null)return'b';if(v>=h)return'r';if(v<=l)return'g';return'y'}
 var c1=null;try{c1=echarts.init(document.getElementById('ch1'))}catch(e){console.warn('ECharts init failed:',e)}
