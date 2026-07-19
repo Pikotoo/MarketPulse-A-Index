@@ -82,7 +82,7 @@ def _above_ma(df: pd.DataFrame, window: int = 60,
 
 def _momentum(df: pd.DataFrame, days: int = 60,
               as_of: Optional[pd.Timestamp] = None) -> float:
-    """N日动量"""
+    """N日动量，内置异常检测（单日跳变>50%=数据异常，跳过异常日计算）"""
     if df is None or len(df) < days + 1:
         return 0.0
     if as_of is not None:
@@ -91,8 +91,23 @@ def _momentum(df: pd.DataFrame, days: int = 60,
         nearby = df
     if len(nearby) < days + 1:
         return 0.0
-    current = float(nearby['close'].iloc[-1])
-    past = float(nearby['close'].iloc[-(days + 1)])
+    
+    closes = nearby['close'].values
+    pct_changes = (closes[1:] - closes[:-1]) / closes[:-1]
+    
+    # 检测异常跳变日
+    anomaly_mask = abs(pct_changes[-(days+1):]) > 0.5
+    if anomaly_mask.any():
+        # 找到最后一个异常日，从它之后重新计算
+        anomaly_idx = len(pct_changes) - (days+1) + max(i for i, v in enumerate(anomaly_mask) if v)
+        if anomaly_idx + 2 < len(closes):
+            current = float(closes[-1])
+            past = float(closes[anomaly_idx + 1])
+            return (current - past) / past if past > 0 else 0.0
+        return 0.0
+    
+    current = float(closes[-1])
+    past = float(closes[-(days + 1)])
     return (current - past) / past if past > 0 else 0.0
 
 

@@ -913,4 +913,4 @@ if __name__ == "__main__":
     print()
     print(f"  Key: py -3.11 scripts/manage_keys.py create --email=you@example.com")
     print("=" * 60)
-    app.run(host=API_HOST, port=API_PORT, debug=False)
+    app.run(host=API_HOST, port=API_PORT, debug=False, threaded=True)

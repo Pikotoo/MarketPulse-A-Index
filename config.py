@@ -67,10 +67,10 @@ DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 
 # ── 限速配置（每秒最大请求数）─────────────────────────────
 RATE_LIMITS = {
-    "free": 1,
-    "personal": 3,
-    "pro": 10,
-    "enterprise": 50,
+    "free": 5,
+    "personal": 15,
+    "pro": 30,
+    "enterprise": 100,
 }
 
 # 每日调用量上限
