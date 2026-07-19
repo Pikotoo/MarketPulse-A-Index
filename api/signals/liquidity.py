@@ -17,7 +17,6 @@ _MP_ROOT = Path(__file__).parent.parent.parent
 if str(_MP_ROOT) not in sys.path:
     sys.path.insert(0, str(_MP_ROOT))
 
-import numpy as np
 import pandas as pd
 from datetime import date
 from typing import Optional
@@ -25,15 +24,7 @@ from typing import Optional
 from api.day_reader import read_macro_series
 
 
-def _norm(v, lo, hi):
-    if v is None: return 0.0
-    if v <= lo: return 0.0
-    if v >= hi: return 1.0
-    return (v - lo) / (hi - lo)
-
-
-def _rnorm(v, lo, hi):
-    return 1.0 - _norm(v, lo, hi)
+from api.utils import norm as _norm, rnorm as _rnorm
 
 
 def _val(code, as_of=None, months=1):
@@ -126,7 +117,7 @@ def _liquidity_history(days: int) -> dict:
             subs = {"shibor_level": s1, "shibor_slope": s2, "m1m2_spread": s3, "mlf_lpr_spread": s4}
             valid = [s["sub_score"] for s in subs.values() if s["sub_score"] is not None]
             if len(valid) >= 2:
-                total = round(sum(valid) / len(valid) * 4 * 100, 1)
+                total = round(sum(valid) * 100, 1)
                 history.append({"date": a.strftime("%Y-%m-%d"), "score": total})
         except Exception:
             continue
@@ -154,7 +145,7 @@ def get_liquidity_score(days: int = 0) -> dict:
     if n == 0:
         return {"indicator": "liquidity_score", "value": None, "status": "no_data", "sub_scores": subs}
 
-    total = round(sum(valid) / n * 4 * 100, 1)
+    total = round(sum(valid) * 100, 1)
     return {
         "indicator": "liquidity_score", "value": total, "range": "0-100",
         "interpretation": _interpret(total), "sub_scores": subs,

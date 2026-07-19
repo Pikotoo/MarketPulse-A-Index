@@ -16,19 +16,14 @@ _MP_ROOT = Path(__file__).parent.parent.parent
 if str(_MP_ROOT) not in sys.path:
     sys.path.insert(0, str(_MP_ROOT))
 
-import numpy as np
 import pandas as pd
-from datetime import date, timedelta
+from datetime import date
 from typing import Optional
 
 from api.signals.sector import SECTOR_NAMES, _load_sector, _momentum, get_sector_codes
 
 
-def _norm(v, lo, hi):
-    if v is None: return 0.0
-    if v <= lo: return 0.0
-    if v >= hi: return 1.0
-    return (v - lo) / (hi - lo)
+from api.utils import norm as _norm
 
 
 def _get_all_momentums(as_of: Optional[pd.Timestamp] = None) -> list:
@@ -70,14 +65,15 @@ def _score_dispersion(moms: list) -> dict:
     return {"value": round(std, 2), "unit": "%", "score": round(s, 3), "sub_score": round(s * 0.35, 4)}
 
 
-def _score_persistence(moms: list) -> dict:
+def _score_persistence(moms: list, as_of=None) -> dict:
     """领涨持续性（简化：Top3 动量 vs 一个月前的 Top3 动量变化）→ 子分数 (0.25)"""
     if len(moms) < 10:
         return {"value": None, "sub_score": None}
     now_top3 = set(m["code"] for m in moms[:3])
 
     # 一个月前
-    month_ago = pd.Timestamp.now() - pd.Timedelta(days=21)
+    now_date = pd.Timestamp(as_of) if as_of else pd.Timestamp.now()
+    month_ago = now_date - pd.Timedelta(days=21)
     old_moms = _get_all_momentums(month_ago)
     old_top5 = set(m["code"] for m in old_moms[:5])
 
@@ -120,10 +116,10 @@ def _crowding_history(days: int) -> dict:
                 continue
             s1 = _score_concentration(moms)
             s2 = _score_dispersion(moms)
-            # persistence 在历史中跳过（需要距今一个月前，太慢）
-            valid = [s["sub_score"] for s in [s1, s2] if s["sub_score"] is not None]
-            if len(valid) >= 1:
-                total = round(sum(valid) / len(valid) * 3 * 100, 1)
+            s3 = _score_persistence(moms, as_of=a)
+            valid = [s["sub_score"] for s in [s1, s2, s3] if s["sub_score"] is not None]
+            if len(valid) >= 2:
+                total = round(sum(valid) * 100, 1)
                 history.append({"date": a.strftime("%Y-%m-%d"), "score": total})
         except Exception:
             continue
@@ -151,7 +147,7 @@ def get_sector_crowding(days: int = 0) -> dict:
     if n == 0:
         return {"indicator": "sector_crowding", "value": None, "status": "no_data", "sub_scores": subs}
 
-    total = round(sum(valid) / n * 3 * 100, 1)
+    total = round(sum(valid) * 100, 1)
     return {
         "indicator": "sector_crowding", "value": total, "range": "0-100",
         "interpretation": _interpret(total), "sub_scores": subs,

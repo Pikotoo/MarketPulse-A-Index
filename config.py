@@ -38,8 +38,29 @@ API_HOST = os.getenv("API_HOST", "0.0.0.0")
 API_VERSION = "2.1.0"
 HEALTH_ENDPOINT_URL = f"http://localhost:{API_PORT}/api/v1/health"
 ALGORITHM_VERSION = "2026.07.17"
-_DEFAULT_DASHBOARD_KEY = "mp-" + __import__("secrets").token_hex(16)
-DASHBOARD_KEY = os.getenv("DASHBOARD_KEY", _DEFAULT_DASHBOARD_KEY)  # 仪表盘专用只读 key（未设置则随机生成）
+_DASHBOARD_KEY_FILE = DATA_DIR / ".dashboard_key"
+
+def _load_or_create_dashboard_key() -> str:
+    """加载持久化的 Dashboard Key，不存在则生成并保存"""
+    env_val = os.getenv("DASHBOARD_KEY")
+    if env_val:
+        return env_val
+    try:
+        if _DASHBOARD_KEY_FILE.exists():
+            saved = _DASHBOARD_KEY_FILE.read_text().strip()
+            if saved:
+                return saved
+    except Exception:
+        pass
+    # 生成新 key 并持久化
+    new_key = "mp-" + __import__("secrets").token_hex(16)
+    try:
+        _DASHBOARD_KEY_FILE.write_text(new_key)
+    except Exception:
+        pass
+    return new_key
+
+DASHBOARD_KEY = _load_or_create_dashboard_key()
 
 # ── AI 配置 ─────────────────────────────────────────────
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")

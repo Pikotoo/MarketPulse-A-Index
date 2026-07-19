@@ -18,7 +18,6 @@ from datetime import date, datetime
 from typing import Optional, Dict
 
 import pandas as pd
-import numpy as np
 
 from config import MACRO_DATA_DIR
 
@@ -41,9 +40,31 @@ def _build_macro_index():
             _MACRO_INDEX[code.upper()] = fpath
 
 
+# 允许读取的文件目录白名单
+_ALLOWED_DIRS = [MACRO_DATA_DIR]
+
+# 延迟导入以避免循环引用
+def _get_allowed_dirs() -> list:
+    try:
+        from config import DATA_ROOT
+        if DATA_ROOT not in _ALLOWED_DIRS:
+            _ALLOWED_DIRS.append(DATA_ROOT)
+    except Exception:
+        pass
+    return _ALLOWED_DIRS
+
+
 def read_day_file(path: str | Path) -> pd.DataFrame:
-    """读取单个 .day 文件，返回 DataFrame（date索引, close列等）"""
-    path = Path(path)
+    """读取单个 .day 文件，返回 DataFrame（date索引, close列等）
+
+    安全约束：仅允许读取白名单目录内的文件，防止路径遍历攻击。
+    """
+    path = Path(path).resolve()
+
+    # 路径白名单校验
+    allowed = _get_allowed_dirs()
+    if not any(str(path).startswith(str(d.resolve())) for d in allowed):
+        raise PermissionError(f"禁止访问目录外的文件: {path}")
     if not path.exists():
         raise FileNotFoundError(f"未找到文件: {path}")
 

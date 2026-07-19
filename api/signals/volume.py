@@ -24,9 +24,8 @@ _MP_ROOT = Path(__file__).parent.parent.parent
 if str(_MP_ROOT) not in sys.path:
     sys.path.insert(0, str(_MP_ROOT))
 
-import numpy as np
 import pandas as pd
-from datetime import date, timedelta
+from datetime import date
 from typing import Optional
 
 from api.day_reader import read_macro_series
@@ -36,14 +35,6 @@ def _load_amount() -> Optional[pd.DataFrame]:
     """加载成交额数据 (TRD = 全市场成交额)"""
     try:
         return read_macro_series("TRD")
-    except Exception:
-        return None
-
-
-def _load_volume() -> Optional[pd.DataFrame]:
-    """加载成交量数据 (TRL = 全市场成交量)"""
-    try:
-        return read_macro_series("TRL")
     except Exception:
         return None
 
@@ -61,15 +52,7 @@ def _load_sh_index() -> Optional[pd.DataFrame]:
     return None
 
 
-def _norm(v: Optional[float], lo: float, hi: float) -> float:
-    """线性归一化到 0-1"""
-    if v is None:
-        return 0.0
-    if v <= lo:
-        return 0.0
-    if v >= hi:
-        return 1.0
-    return (v - lo) / (hi - lo)
+from api.utils import norm as _norm
 
 
 def _ma_deviation(df: pd.DataFrame, ma_window: int = 20) -> Optional[float]:
@@ -94,12 +77,18 @@ def _trend_change(df: pd.DataFrame, window: int = 20) -> Optional[float]:
     return round((latest / past - 1) * 100, 2)
 
 
-def _vol_price_relation() -> Optional[dict]:
+def _vol_price_relation(as_of=None) -> Optional[dict]:
     """量价关系分析：涨放量+跌缩量=健康"""
     try:
         sh = _load_sh_index()
         if sh is None or len(sh) < 22:
             return None
+
+        if as_of is not None:
+            as_of_ts = pd.Timestamp(as_of)
+            sh = sh[sh.index <= as_of_ts]
+            if len(sh) < 22:
+                return None
 
         # 近5日和近20日量价关系
         results = {}
@@ -209,17 +198,7 @@ def _interpret(score: float) -> str:
 
 
 def _volume_history(days: int) -> dict:
-    """历史序列"""
-    amount = _load_amount()
-    sh = _load_sh_index()
-    if amount is None and sh is None:
-        return {"indicator": "volume_score", "status": "no_data", "history": []}
-
-    # 优先用成交额数据
-    df = amount if amount is not None else sh
-    if df is None:
-        return {"indicator": "volume_score", "status": "no_data", "history": []}
-
+    """历史序列 — 使用与实时模式一致的 3 维评分（偏离+趋势+量价）"""
     days = min(days, 365)
     end = pd.Timestamp.now()
     cursor = end - pd.Timedelta(days=days)
@@ -237,39 +216,14 @@ def _volume_history(days: int) -> dict:
     history = []
     for a in anchors:
         try:
-            nearby = df[df.index <= a]
-            if len(nearby) < 22:
-                continue
-
-            ma20 = float(nearby["close"].iloc[-20:].mean())
-            latest = float(nearby["close"].iloc[-1])
-            dev = round((latest / ma20 - 1) * 100, 2) if ma20 > 0 else 0
-
-            # 简化的趋势
-            if len(nearby) >= 6:
-                t5_latest = float(nearby["close"].iloc[-1])
-                t5_past = float(nearby["close"].iloc[-6])
-                t5 = round((t5_latest / t5_past - 1) * 100, 2) if t5_past > 0 else 0
-            else:
-                t5 = 0
-
-            abs_dev = abs(dev)
-            if abs_dev < 10: s = 0.4
-            elif abs_dev < 20: s = 0.5
-            elif abs_dev < 30: s = 0.6
-            elif abs_dev < 50: s = 0.75
-            else: s = 0.9
-
-            s_trend = _norm(t5, -20.0, 30.0)
-            score = round((s * 0.5 + s_trend * 0.5) * 100, 1)
-
-            history.append({
-                "date": a.strftime("%Y-%m-%d"),
-                "score": score,
-                "amount_latest": round(latest, 2),
-                "amount_ma20": round(ma20, 2),
-                "deviation_pct": dev,
-            })
+            result = _compute_volume_at(a)
+            if result is not None:
+                history.append({
+                    "date": a.strftime("%Y-%m-%d"),
+                    "score": result["value"],
+                    "amount_latest": result.get("amount_latest"),
+                    "deviation_pct": result.get("deviation_ma20_pct"),
+                })
         except Exception:
             continue
 
@@ -280,39 +234,58 @@ def _volume_history(days: int) -> dict:
     }
 
 
-def _compute_volume_at(as_of: pd.Timestamp) -> Optional[float]:
-    """在指定日期计算量能分 (0-100)"""
+def _compute_volume_at(as_of: pd.Timestamp) -> Optional[dict]:
+    """在指定日期计算量能分 — 与实时模式使用相同的 3 维评分逻辑"""
     amount = _load_amount()
     if amount is None:
         return None
 
-    nearby = amount[amount.index <= as_of]
+    nearby = amount[amount.index <= pd.Timestamp(as_of)]
     if len(nearby) < 22:
         return None
 
     try:
+        # 1. 成交额偏离度（与实时模式一致）
         ma20 = float(nearby["close"].iloc[-20:].mean())
         latest = float(nearby["close"].iloc[-1])
         dev = round((latest / ma20 - 1) * 100, 2) if ma20 > 0 else 0
 
+        # 2. 成交额趋势（5日 + 20日）
         if len(nearby) >= 6:
             t5_latest = float(nearby["close"].iloc[-1])
             t5_past = float(nearby["close"].iloc[-6])
-            t5 = round((t5_latest / t5_past - 1) * 100, 2) if t5_past > 0 else 0
+            trend5 = round((t5_latest / t5_past - 1) * 100, 2) if t5_past > 0 else 0
         else:
-            t5 = 0
+            trend5 = 0
 
-        abs_dev = abs(dev)
-        if abs_dev < 10: s_dev = 0.4
-        elif abs_dev < 20: s_dev = 0.5
-        elif abs_dev < 30: s_dev = 0.6
-        elif abs_dev < 50: s_dev = 0.75
-        else: s_dev = 0.9
+        if len(nearby) >= 21:
+            t20_past = float(nearby["close"].iloc[-21])
+            trend20 = round((latest / t20_past - 1) * 100, 2) if t20_past > 0 else 0
+        else:
+            trend20 = 0
 
-        s_trend = _norm(t5, -20.0, 30.0)
+        # 3. 量价关系（使用 SH 指数历史数据）
+        vp = _vol_price_relation(as_of=as_of)
 
-        # 简化：量价关系权重降低（历史难以精确计算），偏差+趋势各半
-        return round((s_dev * 0.5 + s_trend * 0.5) * 100, 1)
+        # 使用与实时模式相同的评分函数（权重 0.40/0.35/0.25）
+        s1 = _score_amount_deviation(dev)
+        s2 = _score_amount_trend(trend5, trend20)
+        s3 = _score_vol_price_health(vp)
+
+        valid = [s["sub_score"] for s in [s1, s2, s3] if s["sub_score"] is not None]
+        if not valid:
+            return None
+
+        total = round(sum(valid) * 100, 1)
+
+        return {
+            "indicator": "volume_score", "value": total, "range": "0-100",
+            "amount_latest": round(latest, 2), "deviation_ma20_pct": dev,
+            "trend_5d_pct": trend5, "trend_20d_pct": trend20,
+            "vol_price_health": vp, "sub_scores": {"amount_deviation": s1, "amount_trend": s2, "vol_price_health": s3},
+            "dimensions_valid": len(valid), "dimensions_total": 3,
+            "as_of_date": str(as_of)[:10],
+        }
     except Exception:
         return None
 
@@ -328,10 +301,10 @@ def get_volume_score(days: int = 0, as_of=None) -> dict:
         return _volume_history(days)
 
     if as_of is not None:
-        val = _compute_volume_at(pd.Timestamp(as_of))
-        if val is not None:
-            return {"indicator": "volume_score", "value": val, "range": "0-100",
-                    "interpretation": _interpret(val), "as_of_date": str(as_of)[:10]}
+        result = _compute_volume_at(pd.Timestamp(as_of))
+        if result is not None:
+            result["interpretation"] = _interpret(result["value"])
+            return result
         return {"indicator": "volume_score", "value": None, "status": "no_data",
                 "message": "该日期量能数据不足"}
 
@@ -355,7 +328,7 @@ def get_volume_score(days: int = 0, as_of=None) -> dict:
         return {"indicator": "volume_score", "value": None, "status": "no_data",
                 "sub_scores": sub_scores}
 
-    total = round(sum(valid) / n_valid * 3 * 100, 1)
+    total = round(sum(valid) * 100, 1)
 
     amt_latest = float(amount["close"].iloc[-1]) if amount is not None and len(amount) > 0 else None
 

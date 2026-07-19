@@ -8,7 +8,6 @@ API Key 认证系统 — 多用户、分级限速、用量统计
 """
 
 import sys
-import os
 from pathlib import Path
 
 # 确保 MarketPulse 的 config 优先被导入
@@ -16,12 +15,11 @@ _MP_ROOT = Path(__file__).parent.parent
 if str(_MP_ROOT) not in sys.path:
     sys.path.insert(0, str(_MP_ROOT))
 
-import json
 import hashlib
 import secrets
 import sqlite3
 import time
-from datetime import date, datetime
+from datetime import date
 from typing import Optional
 from functools import wraps
 from flask import request, jsonify
@@ -128,10 +126,11 @@ def enable_key(key_id: int):
 # ── 认证中间件 ───────────────────────────────────────────
 
 class RateLimiter:
-    """滑动窗口限速器（基于内存）"""
+    """滑动窗口限速器（基于内存，定期清理过期条目）"""
 
     def __init__(self):
         self._windows: dict[str, list] = {}  # key_hash → [timestamps]
+        self._last_cleanup = time.time()
 
     def check(self, key_hash: str, tier: str) -> tuple[bool, int]:
         """返回 (是否通过, 剩余可用次数)"""
@@ -155,6 +154,15 @@ class RateLimiter:
 
         self._windows[key_hash].append(now)
         remaining = limit - (count + 1)
+
+        # 每 5 分钟清理一次无活跃记录的 key_hash（防止内存泄漏）
+        if now - self._last_cleanup > 300:
+            self._windows = {
+                k: v for k, v in self._windows.items()
+                if v and now - v[-1] < 3600  # 1小时内无请求则清除
+            }
+            self._last_cleanup = now
+
         return True, remaining
 
 
@@ -178,36 +186,39 @@ def _resolve_key(raw_key: str) -> Optional[dict]:
 
 
 def _check_daily_quota(key_id: int, tier: str) -> tuple[bool, int]:
-    """检查日配额，返回 (是否通过, 已用次数)"""
+    """检查日配额，返回 (是否通过, 已用次数)
+
+    使用 BEGIN IMMEDIATE 事务防止 TOCTOU 竞态条件。
+    """
     today = date.today().isoformat()
     quota = DAILY_QUOTA.get(tier, 50)
     conn = _get_db()
 
-    row = conn.execute(
-        "SELECT request_count FROM daily_usage WHERE key_id = ? AND date = ?",
-        (key_id, today)
-    ).fetchone()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT request_count FROM daily_usage WHERE key_id = ? AND date = ?",
+            (key_id, today)
+        ).fetchone()
 
-    used = row["request_count"] if row else 0
+        used = row["request_count"] if row else 0
 
-    if used >= quota:
+        if used >= quota:
+            conn.commit()
+            return False, used
+
+        conn.execute(
+            "INSERT INTO daily_usage (key_id, date, request_count) VALUES (?, ?, 1) "
+            "ON CONFLICT(key_id, date) DO UPDATE SET request_count = request_count + 1",
+            (key_id, today)
+        )
+        conn.commit()
+        return True, used + 1
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
         conn.close()
-        return False, used
-
-    if row:
-        conn.execute(
-            "UPDATE daily_usage SET request_count = request_count + 1 WHERE key_id = ? AND date = ?",
-            (key_id, today)
-        )
-    else:
-        conn.execute(
-            "INSERT INTO daily_usage (key_id, date, request_count) VALUES (?, ?, 1)",
-            (key_id, today)
-        )
-
-    conn.commit()
-    conn.close()
-    return True, used + 1
 
 
 def _update_last_used(key_id: int):

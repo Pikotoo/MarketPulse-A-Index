@@ -5,14 +5,14 @@
 Key 存储为 SHA256 哈希，不存明文。
 """
 
-import hashlib
 import sqlite3
 import time
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 from functools import wraps
-from flask import request, g
+from flask import request
 
 from config import DB_PATH
+from api.auth import _hash_key  # 复用 auth.py 的哈希实现
 
 # ── DB 初始化 ────────────────────────────────────────────
 
@@ -45,13 +45,6 @@ def init_audit_db():
     conn.close()
 
 
-def _hash_key(raw_key: str) -> str:
-    """Key → SHA256 哈希"""
-    if not raw_key:
-        return ""
-    return hashlib.sha256(raw_key.encode()).hexdigest()
-
-
 def _log_request(endpoint: str, status_code: int,
                  response_time_ms: float, params: str = ""):
     """写入一条审计日志（非阻塞）"""
@@ -79,8 +72,9 @@ def _log_request(endpoint: str, status_code: int,
         conn.commit()
         conn.close()
     except Exception:
-        # 审计日志写入失败不应影响 API 响应
-        pass
+        # 审计日志写入失败不应影响 API 响应，但记录到 stderr
+        import sys as _sys
+        print(f"[audit] 日志写入失败: {endpoint}", file=_sys.stderr)
 
 
 def audit_trail(f):

@@ -15,7 +15,7 @@ API 请求优先读缓存，缓存未命中时实时计算并回写。
 
 import json
 import sqlite3
-from datetime import date, datetime
+from datetime import date
 from typing import Optional
 
 from config import DB_PATH

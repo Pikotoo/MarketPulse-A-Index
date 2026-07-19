@@ -19,47 +19,61 @@ _MP_ROOT = Path(__file__).parent.parent.parent
 if str(_MP_ROOT) not in sys.path:
     sys.path.insert(0, str(_MP_ROOT))
 
-import pandas as pd
-from datetime import date, timedelta
+from datetime import date
 from typing import Optional
 
 
 def _get_regime(composite: Optional[float], panic: Optional[float],
                 breadth: Optional[float]) -> dict:
-    """三维状态判定"""
+    """三维状态判定 — composite(情绪) + panic(恐慌) + breadth(宽度) 综合判定"""
     if composite is None:
         return {"regime": "unknown", "label": "数据不足", "risk_level": "unknown"}
 
     c = float(composite)
     p = float(panic) if panic is not None else 50
-    b = float(breadth) * 100 if breadth is not None else 50  # breadth 是 0-1
+    b = float(breadth) * 100 if breadth is not None else 50  # breadth 是 0-1，转0-100
 
-    if c < 25 and p > 65:
+    # 三维调整：panic 和 breadth 修正 composite 阈值判断
+    # 高恐慌 → 压低调整分（市场恐慌中），低恐慌 → 抬高
+    # 窄宽度 → 压低调整分（少数板块涨），宽宽度 → 抬高
+    adj = c
+    if p > 75:       adj -= 12
+    elif p > 60:     adj -= 6
+    elif p < 20:     adj += 4
+    elif p < 35:     adj += 2
+
+    if b < 25:       adj -= 10
+    elif b < 40:     adj -= 4
+    elif b > 75:     adj += 6
+
+    adj = max(0, min(100, adj))
+
+    if adj < 25 and p > 65:
         regime = "panic"
         label = "恐慌"
         risk = "high_opportunity"
         desc = "极度恐慌——估值低+恐慌高，历史上常是中长期底部区域"
-    elif c < 35:
+    elif adj < 35:
         regime = "bearish"
         label = "低迷"
         risk = "moderate_opportunity"
         desc = "市场低迷——情绪偏低，但恐慌未达极致，底部信号不充分"
-    elif c < 45:
+    elif adj < 45:
         regime = "recovery"
         label = "修复"
         risk = "cautious"
         desc = "市场修复中——情绪从低位回升，宽度改善"
-    elif c < 55:
+    elif adj < 55:
         regime = "neutral"
         label = "中性"
         risk = "neutral"
         desc = "市场中性——不冷不热，无明确信号"
-    elif c < 70:
+    elif adj < 70:
         regime = "bullish"
         label = "乐观"
         risk = "elevated"
         desc = "市场偏乐观——情绪上升中，需关注是否过热"
-    elif c < 85:
+    elif adj < 85:
         regime = "euphoria"
         label = "亢奋"
         risk = "high_risk"

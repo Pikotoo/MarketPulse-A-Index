@@ -16,7 +16,6 @@ _MP_ROOT = Path(__file__).parent.parent.parent
 if str(_MP_ROOT) not in sys.path:
     sys.path.insert(0, str(_MP_ROOT))
 
-import numpy as np
 import pandas as pd
 from datetime import date
 from typing import Optional
@@ -24,10 +23,12 @@ from typing import Optional
 from api.day_reader import read_macro_series
 
 
+from api.utils import norm as _norm
+
+
 def _score_etf_flow(as_of=None) -> dict:
     """ETF 净申赎趋势 — 近20日变化"""
     try:
-        # ETF 融资余额数据
         df = read_macro_series("SETF")
         if df is None or len(df) < 21:
             return {"value": None, "sub_score": None}
@@ -45,14 +46,7 @@ def _score_etf_flow(as_of=None) -> dict:
 
         change = round((latest_ma5 / past_ma20 - 1) * 100, 2)
 
-        # -10% ~ +20% → 0-1
-        def _norm(v, lo, hi):
-            if v is None: return 0.0
-            if v <= lo: return 0.0
-            if v >= hi: return 1.0
-            return (v - lo) / (hi - lo)
-
-        s = _norm(change, -10.0, 20.0)
+        s = _norm(change, -10.0, 20.0)  # -10% ~ +20% → 0-1
         return {"value": change, "unit": "%", "score": round(s, 3), "sub_score": round(s * 0.30, 4)}
     except Exception:
         return {"value": None, "sub_score": None}
@@ -118,7 +112,7 @@ def _fund_sentiment_history(days: int) -> dict:
             subs = {"northbound": s1, "margin": s2, "etf_flow": s3}
             valid = [s["sub_score"] for s in subs.values() if s["sub_score"] is not None]
             if len(valid) >= 2:
-                total = round(sum(valid) / len(valid) * 3 * 100, 1)
+                total = round(sum(valid) * 100, 1)
                 history.append({"date": a.strftime("%Y-%m-%d"), "score": total})
         except Exception:
             continue
@@ -145,7 +139,7 @@ def get_fund_sentiment(days: int = 0) -> dict:
     if n == 0:
         return {"indicator": "fund_sentiment", "value": None, "status": "no_data", "sub_scores": subs}
 
-    total = round(sum(valid) / n * 3 * 100, 1)
+    total = round(sum(valid) * 100, 1)
     return {
         "indicator": "fund_sentiment", "value": total, "range": "0-100",
         "interpretation": _interpret(total), "sub_scores": subs,

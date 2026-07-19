@@ -18,9 +18,8 @@ _MP_ROOT = Path(__file__).parent.parent.parent
 if str(_MP_ROOT) not in sys.path:
     sys.path.insert(0, str(_MP_ROOT))
 
-import numpy as np
 import pandas as pd
-from datetime import date, timedelta
+from datetime import date
 from typing import Optional
 
 from api.day_reader import read_macro_series
@@ -81,15 +80,7 @@ def _safe_mom_change(df: pd.DataFrame, periods: int = 20) -> Optional[float]:
     return round((latest / past - 1) * 100, 2)
 
 
-def _norm(v: Optional[float], lo: float, hi: float) -> float:
-    """线性归一化到 0-1"""
-    if v is None:
-        return 0.0
-    if v <= lo:
-        return 0.0
-    if v >= hi:
-        return 1.0
-    return (v - lo) / (hi - lo)
+from api.utils import norm as _norm
 
 
 def _score_rzyoy(yoy: Optional[float]) -> dict:
@@ -151,7 +142,7 @@ def _interpret(score: float) -> str:
 
 
 def _margin_history(days: int) -> dict:
-    """历史序列（周频采样）"""
+    """历史序列（周频采样）— 复用实时评分函数"""
     rz = _load_rz()
     rq = _load_rq()
     if rz is None or rq is None:
@@ -165,9 +156,8 @@ def _margin_history(days: int) -> dict:
     while cursor <= end:
         if cursor.dayofweek < 5:
             anchors.append(cursor)
-        cursor += pd.Timedelta(days=3)  # ~每周 2-3 个点
+        cursor += pd.Timedelta(days=3)
 
-    # 降采样
     if len(anchors) > 50:
         step = max(1, len(anchors) // 40)
         anchors = anchors[::step]
@@ -181,17 +171,19 @@ def _margin_history(days: int) -> dict:
                 continue
 
             rz_yoy = _safe_yoy(rz_nearby, 252)
-            rz_trend = _safe_mom_change(rz_nearby, 20)
+            s1 = _score_rzyoy(rz_yoy)
+            s2 = _score_rzrq_ratio(rz_nearby, rq_nearby)
+            s3 = _score_rz_trend(rz_nearby)
+
+            valid = [s["sub_score"] for s in [s1, s2, s3] if s["sub_score"] is not None]
+            if not valid:
+                continue
+            score = round(sum(valid) * 100, 1)
 
             rz_v = float(rz_nearby["close"].iloc[-1])
             rq_v = float(rq_nearby["close"].iloc[-1])
             ratio = round(rz_v / rq_v, 1) if rq_v > 0 else None
 
-            s1 = _norm(rz_yoy, -30.0, 80.0) * 0.35 if rz_yoy is not None else 0
-            s2 = _norm(ratio, 20.0, 500.0) * 0.35 if ratio is not None else 0
-            s3 = _norm(rz_trend, -10.0, 15.0) * 0.30 if rz_trend is not None else 0
-
-            score = round((s1 + s2 + s3) * 100, 1)
             history.append({
                 "date": a.strftime("%Y-%m-%d"),
                 "score": score,
@@ -210,7 +202,7 @@ def _margin_history(days: int) -> dict:
 
 
 def _compute_margin_at(as_of: pd.Timestamp) -> Optional[float]:
-    """在指定日期计算融资融券情绪分 (0-100)"""
+    """在指定日期计算融资融券情绪分 (0-100) — 复用实时评分函数"""
     rz = _load_rz()
     rq = _load_rq()
     if rz is None or rq is None:
@@ -223,17 +215,14 @@ def _compute_margin_at(as_of: pd.Timestamp) -> Optional[float]:
 
     try:
         rz_yoy = _safe_yoy(rz_nearby, 252)
-        rz_trend = _safe_mom_change(rz_nearby, 20)
+        s1 = _score_rzyoy(rz_yoy)
+        s2 = _score_rzrq_ratio(rz_nearby, rq_nearby)
+        s3 = _score_rz_trend(rz_nearby)
 
-        rz_v = float(rz_nearby["close"].iloc[-1])
-        rq_v = float(rq_nearby["close"].iloc[-1])
-        ratio = round(rz_v / rq_v, 1) if rq_v > 0 else None
-
-        s1 = _norm(rz_yoy, -30.0, 80.0) * 0.35 if rz_yoy is not None else 0
-        s2 = _norm(ratio, 20.0, 500.0) * 0.35 if ratio is not None else 0
-        s3 = _norm(rz_trend, -10.0, 15.0) * 0.30 if rz_trend is not None else 0
-
-        return round((s1 + s2 + s3) * 100, 1)
+        valid = [s["sub_score"] for s in [s1, s2, s3] if s["sub_score"] is not None]
+        if not valid:
+            return None
+        return round(sum(valid) * 100, 1)
     except Exception:
         return None
 
@@ -277,7 +266,7 @@ def get_margin_sentiment(days: int = 0, as_of=None) -> dict:
         return {"indicator": "margin_sentiment", "value": None, "status": "no_data",
                 "sub_scores": sub_scores}
 
-    total = round(sum(valid) / n_valid * 3 * 100, 1)  # 补齐缺失维度
+    total = round(sum(valid) * 100, 1)  # sub_score 自带权重（0.35+0.35+0.30=1.0）
 
     rz_latest = float(rz["close"].iloc[-1]) if rz is not None and len(rz) > 0 else None
     rq_latest = float(rq["close"].iloc[-1]) if rq is not None and len(rq) > 0 else None

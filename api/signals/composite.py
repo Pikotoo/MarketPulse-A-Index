@@ -25,11 +25,9 @@ if str(_MP_ROOT) not in sys.path:
     sys.path.insert(0, str(_MP_ROOT))
 
 import pandas as pd
-import numpy as np
 from datetime import date
 from typing import Optional
 
-from api.day_reader import get_macro_value
 from api.signals.erp import _get_bond_yield as _get_bond_yield_latest, _get_bond_yield_at  # 去重：复用 erp.py 的实现
 
 
@@ -44,7 +42,7 @@ def _score_erp_value(erp: Optional[float]) -> Optional[float]:
     """ERP → 情绪子分（映射 -2~+8 → 0-100）"""
     if erp is None:
         return None
-    normalized = max(0, min(100, (float(erp) + 2) / 8 * 100))
+    normalized = max(0, min(100, (float(erp) + 2) / 10 * 100))  # ERP 范围 -2~+8，跨度 10
     return float(round(normalized * 0.1429, 1))  # 1/7
 
 

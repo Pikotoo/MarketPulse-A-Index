@@ -24,9 +24,8 @@ _MP_ROOT = Path(__file__).parent.parent.parent
 if str(_MP_ROOT) not in sys.path:
     sys.path.insert(0, str(_MP_ROOT))
 
-import numpy as np
 import pandas as pd
-from datetime import date, timedelta
+from datetime import date
 from typing import Optional
 
 from config import DATA_ROOT
@@ -58,18 +57,7 @@ def _load_lockup() -> Optional[pd.DataFrame]:
         return None
 
 
-def _norm(v: Optional[float], lo: float, hi: float) -> float:
-    if v is None:
-        return 0.0
-    if v <= lo:
-        return 0.0
-    if v >= hi:
-        return 1.0
-    return (v - lo) / (hi - lo)
-
-
-def _rnorm(v: Optional[float], lo: float, hi: float) -> float:
-    return 1.0 - _norm(v, lo, hi)
+from api.utils import norm as _norm
 
 
 def _vol_deviation(df: pd.DataFrame, ma_window: int = 20) -> Optional[float]:
@@ -146,11 +134,7 @@ def _interpret(score: float) -> str:
 
 
 def _lockup_history(days: int) -> dict:
-    """历史序列"""
-    df = _load_lockup()
-    if df is None:
-        return {"indicator": "lockup_pressure", "status": "no_data", "history": []}
-
+    """历史序列 — 使用与实时模式一致的 3 维评分（偏离+趋势+历史比值）"""
     days = min(days, 365)
     end = pd.Timestamp.now()
     cursor = end - pd.Timedelta(days=days)
@@ -168,32 +152,12 @@ def _lockup_history(days: int) -> dict:
     history = []
     for a in anchors:
         try:
-            nearby = df[df.index <= a]
-            if len(nearby) < 22:
-                continue
-
-            latest = float(nearby["total_lockup_vol"].iloc[-1])
-            ma20 = float(nearby["total_lockup_vol"].iloc[-20:].mean())
-            dev = round((latest / ma20 - 1) * 100, 2) if ma20 > 0 else 0
-
-            dev_s = _norm(dev, -30.0, 100.0)
-
-            if len(nearby) >= 120:
-                ma20v = ma20
-                ma120 = float(nearby["total_lockup_vol"].iloc[-120:].mean())
-                ratio = round(ma20v / ma120, 2) if ma120 > 0 else 1.0
-                ratio_s = _norm(ratio, 0.5, 2.5)
-            else:
-                ratio_s = 0.5
-
-            score = round((dev_s * 0.5 + ratio_s * 0.5) * 100, 1)
-            history.append({
-                "date": a.strftime("%Y-%m-%d"),
-                "score": score,
-                "lockup_vol_latest": round(latest, 2),
-                "lockup_vol_ma20": round(ma20, 2),
-                "deviation_pct": dev,
-            })
+            result = _compute_lockup_at(a)
+            if result is not None:
+                history.append({
+                    "date": a.strftime("%Y-%m-%d"),
+                    "score": result["value"],
+                })
         except Exception:
             continue
 
@@ -204,32 +168,36 @@ def _lockup_history(days: int) -> dict:
     }
 
 
-def _compute_lockup_at(as_of: pd.Timestamp) -> Optional[float]:
-    """在指定日期计算限售解禁压力分 (0-100)"""
+def _compute_lockup_at(as_of: pd.Timestamp) -> Optional[dict]:
+    """在指定日期计算限售解禁压力分 — 与实时模式使用相同的 3 维评分"""
     df = _load_lockup()
     if df is None:
         return None
 
-    nearby = df[df.index <= as_of]
+    nearby = df[df.index <= pd.Timestamp(as_of)]
     if len(nearby) < 22:
         return None
 
     try:
-        latest = float(nearby["total_lockup_vol"].iloc[-1])
-        ma20 = float(nearby["total_lockup_vol"].iloc[-20:].mean())
-        dev = round((latest / ma20 - 1) * 100, 2) if ma20 > 0 else 0
+        dev = _vol_deviation(nearby)
+        trend = _trend_change(nearby)
 
-        dev_s = _norm(dev, -30.0, 100.0)
+        s1 = _score_deviation(dev)
+        s2 = _score_trend(trend)
+        s3 = _score_ratio(nearby)
 
-        if len(nearby) >= 120:
-            ma20v = ma20
-            ma120 = float(nearby["total_lockup_vol"].iloc[-120:].mean())
-            ratio = round(ma20v / ma120, 2) if ma120 > 0 else 1.0
-            ratio_s = _norm(ratio, 0.5, 2.5)
-        else:
-            ratio_s = 0.5
+        valid = [s["sub_score"] for s in [s1, s2, s3] if s["sub_score"] is not None]
+        if not valid:
+            return None
 
-        return round((dev_s * 0.5 + ratio_s * 0.5) * 100, 1)
+        total = round(sum(valid) * 100, 1)
+        return {
+            "indicator": "lockup_pressure", "value": total, "range": "0-100",
+            "interpretation": _interpret(total),
+            "sub_scores": {"volume_deviation": s1, "trend": s2, "vs_historical_ratio": s3},
+            "dimensions_valid": len(valid), "dimensions_total": 3,
+            "as_of_date": str(as_of)[:10],
+        }
     except Exception:
         return None
 
@@ -245,10 +213,9 @@ def get_lockup_pressure(days: int = 0, as_of=None) -> dict:
         return _lockup_history(days)
 
     if as_of is not None:
-        val = _compute_lockup_at(pd.Timestamp(as_of))
-        if val is not None:
-            return {"indicator": "lockup_pressure", "value": val, "range": "0-100",
-                    "interpretation": _interpret(val), "as_of_date": str(as_of)[:10]}
+        result = _compute_lockup_at(pd.Timestamp(as_of))
+        if result is not None:
+            return result
         return {"indicator": "lockup_pressure", "value": None, "status": "no_data",
                 "message": "该日期解禁数据不足"}
 
@@ -273,7 +240,7 @@ def get_lockup_pressure(days: int = 0, as_of=None) -> dict:
         return {"indicator": "lockup_pressure", "value": None, "status": "no_data",
                 "sub_scores": sub_scores}
 
-    total = round(sum(valid) / n_valid * 3 * 100, 1)
+    total = round(sum(valid) * 100, 1)  # sub_score 自带权重（0.40+0.30+0.30=1.0）
 
     latest_vol = float(df["total_lockup_vol"].iloc[-1]) if len(df) > 0 else None
 

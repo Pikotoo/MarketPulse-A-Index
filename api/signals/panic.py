@@ -20,7 +20,7 @@ if str(_MP_ROOT) not in sys.path:
 
 import numpy as np
 import pandas as pd
-from datetime import date, timedelta
+from datetime import date
 from typing import Optional
 
 from api.day_reader import list_macro_codes, read_macro_series
@@ -29,7 +29,6 @@ from api.signals.sector import SECTOR_NAMES, _load_sector
 # ── 参数 ─────────────────────────────────────────────────
 VOL_LOOKBACK = 20        # 波动率计算窗口
 DISP_LOOKBACK = 60       # 离散度计算窗口
-TREND_LOOKBACK = 20      # 趋势变化窗口
 
 
 def _sector_daily_returns(code: str, lookback: int = 60,

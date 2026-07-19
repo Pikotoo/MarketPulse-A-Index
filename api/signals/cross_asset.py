@@ -19,62 +19,46 @@ _MP_ROOT = Path(__file__).parent.parent.parent
 if str(_MP_ROOT) not in sys.path:
     sys.path.insert(0, str(_MP_ROOT))
 
-import numpy as np
 import pandas as pd
 from datetime import date
 from typing import Optional
 
-from api.day_reader import read_macro_series, get_macro_value
+from api.utils import norm as _norm, rnorm as _rnorm, yoy as _yoy
 
 
-def _norm(v, lo, hi):
-    if v is None: return 0.0
-    if v <= lo: return 0.0
-    if v >= hi: return 1.0
-    return (v - lo) / (hi - lo)
-
-
-def _rnorm(v, lo, hi):
-    return 1.0 - _norm(v, lo, hi)
-
-
-def _yoy(code, as_of=None, lag=12):
+def _get_pe_change_3m(as_of=None, _pe_data=None) -> Optional[float]:
+    """PE 3个月变化率（共享 helper，_pe_data 的 date 列应已转为 datetime）"""
     try:
-        df = read_macro_series(code)
-        if as_of is not None: df = df[df.index <= as_of]
-        if len(df) < lag + 1: return None
-        latest = float(df["close"].iloc[-1])
-        past = float(df["close"].iloc[-(lag + 1)])
-        return round((latest / past - 1) * 100, 2) if past > 0 else None
-    except Exception:
-        return None
+        if _pe_data is not None:
+            pe = _pe_data
+        else:
+            from api.signals.pe import _load_pe_data
+            pe = _load_pe_data()
 
-
-def _score_stock_bond(as_of=None) -> dict:
-    """股债相对强度 — 10Y国债收益率变化方向 vs 股市表现"""
-    try:
-        # 10Y 国债收益率 3个月变化（收益率上升=债跌）
-        bond_yoy = _yoy("CNG10Y", as_of=as_of) or _yoy("CNDT10Y", as_of=as_of)
-        # 用 PE 作为股市 proxy（PE上升=估值扩张=股市好）
-        from api.signals.pe import _load_pe_data
-        pe = _load_pe_data()
         if pe is None or len(pe) < 63:
-            return {"value": None, "sub_score": None}
+            return None
 
         if as_of is not None and "date" in pe.columns:
-            pe["date"] = pd.to_datetime(pe["date"])
-            pe_nearby = pe[pe["date"] <= as_of]
+            pe_nearby = pe[pe["date"] <= pd.Timestamp(as_of)]
             if len(pe_nearby) < 63:
-                return {"value": None, "sub_score": None}
+                return None
             pe_now = float(pe_nearby["pe"].iloc[-1])
             pe_3m_ago = float(pe_nearby["pe"].iloc[-63]) if len(pe_nearby) >= 63 else pe_now
         else:
             pe_now = float(pe["pe"].iloc[-1])
             pe_3m_ago = float(pe["pe"].iloc[-63]) if len(pe) >= 63 else pe_now
-        pe_change = round((pe_now / pe_3m_ago - 1) * 100, 2) if pe_3m_ago > 0 else 0
+        return round((pe_now / pe_3m_ago - 1) * 100, 2) if pe_3m_ago > 0 else 0
+    except Exception:
+        return None
 
-        # 股强（PE涨）+ 债弱（收益率升）= Risk On → 高分
-        # 股弱（PE跌）+ 债强（收益率降）= Risk Off → 低分
+
+def _score_stock_bond(as_of=None, _pe_data=None) -> dict:
+    """股债相对强度 — 10Y国债收益率变化方向 vs 股市表现"""
+    try:
+        # 10Y 国债收益率 3个月变化（收益率上升=债跌）
+        bond_yoy = _yoy("CNG10Y", as_of=as_of) or _yoy("CNDT10Y", as_of=as_of)
+        pe_change = _get_pe_change_3m(as_of=as_of, _pe_data=_pe_data)
+
         if bond_yoy is not None and pe_change is not None:
             combined = pe_change - (bond_yoy or 0) * 5  # PE变化 vs 利率变化（放大利率权重）
         else:
@@ -88,30 +72,13 @@ def _score_stock_bond(as_of=None) -> dict:
         return {"value": None, "sub_score": None}
 
 
-def _score_gold_stock(as_of=None) -> dict:
+def _score_gold_stock(as_of=None, _pe_data=None) -> dict:
     """黄金/股票比 — 避险 vs 风险偏好"""
     try:
         gold_change = _yoy("GOLD", as_of=as_of, lag=3)  # 3个月黄金变化
-        # 黄金涨 + 股市弱 = Risk Off（避险）
-        # 黄金跌 + 股市强 = Risk On
-        from api.signals.pe import _load_pe_data
-        pe = _load_pe_data()
-        if pe is None:
-            return {"value": None, "sub_score": None}
+        stock_change = _get_pe_change_3m(as_of=as_of, _pe_data=_pe_data)
 
-        if as_of is not None and "date" in pe.columns:
-            pe["date"] = pd.to_datetime(pe["date"])
-            pe_nearby = pe[pe["date"] <= as_of]
-            if len(pe_nearby) < 63:
-                return {"value": None, "sub_score": None}
-            pe_now = float(pe_nearby["pe"].iloc[-1])
-            pe_3m = float(pe_nearby["pe"].iloc[-63]) if len(pe_nearby) >= 63 else pe_now
-        else:
-            pe_now = float(pe["pe"].iloc[-1])
-            pe_3m = float(pe["pe"].iloc[-63]) if len(pe) >= 63 else pe_now
-        stock_change = round((pe_now / pe_3m - 1) * 100, 2) if pe_3m > 0 else 0
-
-        if gold_change is not None:
+        if gold_change is not None and stock_change is not None:
             # 黄金跌+股票涨=最优，黄金涨+股票跌=最差
             combined = stock_change - (gold_change or 0)
         else:
@@ -153,6 +120,10 @@ def _cross_asset_history(days: int) -> dict:
     end = pd.Timestamp.now()
     cursor = end - pd.Timedelta(days=days)
 
+    # 预加载 PE 数据一次，避免每个锚点重复加载两次
+    from api.signals.pe import _load_pe_data
+    pe_data = _load_pe_data()
+
     anchors = []
     while cursor <= end:
         anchors.append(cursor)
@@ -161,13 +132,13 @@ def _cross_asset_history(days: int) -> dict:
     history = []
     for a in anchors:
         try:
-            s1 = _score_stock_bond(as_of=a)
-            s2 = _score_gold_stock(as_of=a)
+            s1 = _score_stock_bond(as_of=a, _pe_data=pe_data)
+            s2 = _score_gold_stock(as_of=a, _pe_data=pe_data)
             s3 = _score_rmb_trend(as_of=a)
             subs = {"stock_vs_bond": s1, "gold_vs_stock": s2, "rmb_trend": s3}
             valid = [s["sub_score"] for s in subs.values() if s["sub_score"] is not None]
             if len(valid) >= 2:
-                total = round(sum(valid) / len(valid) * 3 * 100, 1)
+                total = round(sum(valid) * 100, 1)
                 history.append({"date": a.strftime("%Y-%m-%d"), "score": total})
         except Exception:
             continue
@@ -194,7 +165,7 @@ def get_cross_asset(days: int = 0) -> dict:
     if n == 0:
         return {"indicator": "cross_asset", "value": None, "status": "no_data", "sub_scores": subs}
 
-    total = round(sum(valid) / n * 3 * 100, 1)
+    total = round(sum(valid) * 100, 1)
     return {
         "indicator": "cross_asset", "value": total, "range": "0-100",
         "interpretation": _interpret(total), "sub_scores": subs,

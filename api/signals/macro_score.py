@@ -25,55 +25,16 @@ _MP_ROOT = Path(__file__).parent.parent.parent
 if str(_MP_ROOT) not in sys.path:
     sys.path.insert(0, str(_MP_ROOT))
 
-import numpy as np
 import pandas as pd
 from datetime import date
 from typing import Optional
-
-from api.day_reader import read_macro_series
 
 _EMPTY = {"value": None, "score": None, "sub_score": None, "note": "数据不可用"}
 
 
 # ── 归一化 ────────────────────────────────────────────────
 
-def _norm(v, lo, hi):
-    if v is None: return 0
-    if v <= lo: return 0.0
-    if v >= hi: return 1.0
-    return (v - lo) / (hi - lo)
-
-
-def _rnorm(v, lo, hi):
-    return 1.0 - _norm(v, lo, hi)
-
-
-# ── 取值辅助 ──────────────────────────────────────────────
-
-def _val(code, as_of=None, months=3):
-    """取近N月均值"""
-    try:
-        df = read_macro_series(code)
-        if as_of is not None:
-            df = df[df.index <= as_of]
-        if len(df) == 0: return None
-        return float(df["close"].iloc[-months:].mean())
-    except Exception:
-        return None
-
-
-def _yoy(code, as_of=None, lag=12):
-    """同比变化率"""
-    try:
-        df = read_macro_series(code)
-        if as_of is not None:
-            df = df[df.index <= as_of]
-        if len(df) < lag + 1: return None
-        latest = float(df["close"].iloc[-1])
-        year_ago = float(df["close"].iloc[-(lag + 1)])
-        return (latest / year_ago - 1) * 100 if year_ago > 0 else None
-    except Exception:
-        return None
+from api.utils import norm as _norm, rnorm as _rnorm, yoy as _yoy, val as _val
 
 
 # ── 各子指标评分（支持 as_of）─────────────────────────────
@@ -159,7 +120,7 @@ def _score_m1m2(as_of=None):
     s = _norm(spread, -12.0, 5.0)
     return {
         "value": spread, "unit": "%",
-        "m1_yoy": round(m1_yoy, 2), "m2_yoy_dup": round(m2_yoy, 2),
+        "m1_yoy": round(m1_yoy, 2), "m2_yoy": round(m2_yoy, 2),
         "score": round(s, 3), "sub_score": round(s / 9, 4),
     }
 
@@ -194,7 +155,7 @@ def _compute(as_of=None):
     valid = [s["sub_score"] for s in scores.values() if s["sub_score"] is not None]
     n = len(valid)
     if n == 0: return None, scores, 0
-    composite = sum(valid) / n * 9 * 100  # 补齐缺失维度（9维）
+    composite = sum(valid) * 100  # sub_score 自带 1/9 权重，总和最大 1.0
     return composite, scores, n
 
 
@@ -207,7 +168,7 @@ def _macro_latest():
         "indicator": "macro_score",
         "value": round(composite, 1), "range": "0-100",
         "interpretation": _interpret(composite),
-        "percentile": round(max(0, min(100, composite * 0.9 + 5)), 1),
+        "adjusted_score": round(max(0, min(100, composite * 0.9 + 5)), 1),
         "sub_scores": scores, "dimensions_valid": n, "dimensions_total": 9,
         "as_of_date": date.today().isoformat(),
     }

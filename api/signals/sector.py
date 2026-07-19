@@ -16,7 +16,7 @@ if str(_MP_ROOT) not in sys.path:
 
 import numpy as np
 import pandas as pd
-from datetime import date, timedelta
+from datetime import date
 from typing import Optional
 
 from api.day_reader import read_macro_series, list_macro_codes

@@ -7,7 +7,7 @@
 import time
 from datetime import datetime, timezone, timedelta
 from functools import wraps
-from flask import jsonify, request, g
+from flask import jsonify
 
 from config import API_VERSION, DISCLAIMER, WARNING, DATA_SOURCES, PROCESSING_NOTE, ALGORITHM_VERSION
 

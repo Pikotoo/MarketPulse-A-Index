@@ -25,9 +25,8 @@ _MP_ROOT = Path(__file__).parent.parent.parent
 if str(_MP_ROOT) not in sys.path:
     sys.path.insert(0, str(_MP_ROOT))
 
-import numpy as np
 import pandas as pd
-from datetime import date, timedelta
+from datetime import date
 from typing import Optional
 
 from api.day_reader import read_macro_series
@@ -48,14 +47,7 @@ def _monthly_flows(df: pd.DataFrame) -> Optional[pd.Series]:
     return df["close"].diff().dropna()
 
 
-def _norm(v: Optional[float], lo: float, hi: float) -> float:
-    if v is None:
-        return 0.0
-    if v <= lo:
-        return 0.0
-    if v >= hi:
-        return 1.0
-    return (v - lo) / (hi - lo)
+from api.utils import norm as _norm
 
 
 def _percentile_rank(series: pd.Series, value: float) -> float:
@@ -162,7 +154,7 @@ def _interpret(score: float) -> str:
 
 
 def _northbound_history(days: int) -> dict:
-    """历史序列（月频采样）"""
+    """历史序列（月频采样）— 复用实时评分函数"""
     df = _load_northbound()
     if df is None:
         return {"indicator": "northbound_sentiment", "status": "no_data", "history": []}
@@ -171,42 +163,24 @@ def _northbound_history(days: int) -> dict:
     if flows is None or len(flows) < 3:
         return {"indicator": "northbound_sentiment", "status": "no_data", "history": []}
 
-    # 月频采样：每个月一个点
     history = []
     for idx in range(12, len(flows)):
         try:
             window = flows.iloc[:idx + 1]
-            latest = float(window.iloc[-1])
-            pct_rank = _percentile_rank(window, latest)
+            s1 = _score_recent_flow(window)
+            s2 = _score_quarterly_trend(window)
+            s3 = _score_continuity(window)
 
-            q3 = float(window.iloc[-3:].sum()) if len(window) >= 3 else 0
-            y12_avg = float(window.iloc[-12:].mean()) if len(window) >= 12 else float(window.mean())
-            ratio = round(q3 / (abs(y12_avg) * 3 + 1), 2)
-            s_trend = _norm(ratio, -1.0, 2.5)
-
-            cons = 0
-            direction = 1 if latest > 0 else -1
-            for j in range(len(window) - 1, -1, -1):
-                val = float(window.iloc[j])
-                if (direction > 0 and val > 0) or (direction < 0 and val < 0):
-                    cons += 1
-                else:
-                    break
-            cons = cons * direction
-            abs_cons = abs(cons)
-            if abs_cons <= 1: s_cons = 0.45
-            elif abs_cons <= 3: s_cons = 0.25 if cons < 0 else 0.60
-            elif abs_cons <= 6: s_cons = 0.10 if cons < 0 else 0.75
-            elif abs_cons <= 12: s_cons = 0.03 if cons < 0 else 0.88
-            else: s_cons = 0.0 if cons < 0 else 0.95
-
-            score = round((pct_rank * 0.35 + s_trend * 0.35 + s_cons * 0.30) * 100, 1)
+            valid = [s["sub_score"] for s in [s1, s2, s3] if s["sub_score"] is not None]
+            if not valid:
+                continue
+            score = round(sum(valid) * 100, 1)
             dt = flows.index[idx]
             history.append({
                 "date": dt.strftime("%Y-%m-%d"),
                 "score": score,
-                "monthly_flow": round(latest, 1),
-                "consecutive_months": cons,
+                "monthly_flow": round(float(window.iloc[-1]), 1),
+                "consecutive_months": s3.get("value", 0),
             })
         except Exception:
             continue
@@ -220,7 +194,7 @@ def _northbound_history(days: int) -> dict:
 
 
 def _compute_northbound_at(as_of: pd.Timestamp) -> Optional[float]:
-    """在指定日期计算北向资金情绪分 (0-100)"""
+    """在指定日期计算北向资金情绪分 (0-100) — 复用实时评分函数"""
     df = _load_northbound()
     if df is None:
         return None
@@ -234,31 +208,14 @@ def _compute_northbound_at(as_of: pd.Timestamp) -> Optional[float]:
         if flows is None or len(flows) < 3:
             return None
 
-        latest = float(flows.iloc[-1])
-        pct_rank = _percentile_rank(flows, latest)
+        s1 = _score_recent_flow(flows)
+        s2 = _score_quarterly_trend(flows)
+        s3 = _score_continuity(flows)
 
-        q3 = float(flows.iloc[-3:].sum()) if len(flows) >= 3 else 0
-        y12_avg = float(flows.iloc[-12:].mean()) if len(flows) >= 12 else float(flows.mean())
-        ratio = round(q3 / (abs(y12_avg) * 3 + 1), 2)
-        s_trend = _norm(ratio, -1.0, 2.5)
-
-        cons = 0
-        direction = 1 if latest > 0 else -1
-        for j in range(len(flows) - 1, -1, -1):
-            val = float(flows.iloc[j])
-            if (direction > 0 and val > 0) or (direction < 0 and val < 0):
-                cons += 1
-            else:
-                break
-        cons = cons * direction
-        abs_cons = abs(cons)
-        if abs_cons <= 1: s_cons = 0.45
-        elif abs_cons <= 3: s_cons = 0.25 if cons < 0 else 0.60
-        elif abs_cons <= 6: s_cons = 0.10 if cons < 0 else 0.75
-        elif abs_cons <= 12: s_cons = 0.03 if cons < 0 else 0.88
-        else: s_cons = 0.0 if cons < 0 else 0.95
-
-        return round((pct_rank * 0.35 + s_trend * 0.35 + s_cons * 0.30) * 100, 1)
+        valid = [s["sub_score"] for s in [s1, s2, s3] if s["sub_score"] is not None]
+        if not valid:
+            return None
+        return round(sum(valid) * 100, 1)
     except Exception:
         return None
 
@@ -303,7 +260,7 @@ def get_northbound_sentiment(days: int = 0, as_of=None) -> dict:
         return {"indicator": "northbound_sentiment", "value": None, "status": "no_data",
                 "sub_scores": sub_scores}
 
-    total = round(sum(valid) / n_valid * 3 * 100, 1)
+    total = round(sum(valid) * 100, 1)  # sub_score 自带权重（0.35+0.35+0.30=1.0）
 
     return {
         "indicator": "northbound_sentiment",
