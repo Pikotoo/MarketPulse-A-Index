@@ -4,6 +4,8 @@
 
 > **21 个量化信号指标，一个 API 全搞定。** 不预测涨跌，帮你看清市场真实面目。
 
+![MarketPulse Dashboard](dashboard.png)
+
 [![Python](https://img.shields.io/badge/Python-3.11+-blue)](https://python.org)
 [![Flask](https://img.shields.io/badge/Flask-3.0+-green)](https://flask.palletsprojects.com/)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
