@@ -274,9 +274,22 @@ body{background:#0f1119;color:#c9d1d9;font:13px/1.5 -apple-system,'Microsoft YaH
 </div>
 
 <script>
-var API='',KEY='';
-async function initKey(){try{var r=await fetch(API+'/api/v1/dashboard-key');KEY=(await r.json()).key}catch(e){console.warn('Key fetch failed, retry...');await new Promise(function(ok){setTimeout(ok,2000)});return initKey()}}
+var API='',KEY='',_keyPromise=null;
+function initKey(){
+  if(KEY)return Promise.resolve(KEY);
+  if(!_keyPromise){
+    _keyPromise=(async function(){
+      while(true){
+        try{var r=await fetch(API+'/api/v1/dashboard-key');if(r.ok){KEY=(await r.json()).key;return KEY}}catch(e){}
+        await new Promise(function(ok){setTimeout(ok,2000)})
+      }
+    })()
+  }
+  return _keyPromise
+}
 async function get(p){if(!KEY)await initKey();var r=await fetch(API+p,{headers:{'X-API-Key':KEY}});if(!r.ok)throw Error('HTTP '+r.status);return(await r.json()).data}
+function _g(p){return get(p).catch(function(e){console.warn('API fail:',p,e.message);return null})}
+function V(d){return d||{value:'—',interpretation:'加载失败',percentile:50,dimensions_valid:0,dimensions_total:1,as_of_date:'—',color:'gray',level:'未知',earnings_yield:'—',bond_yield_10y:'—',components:{},label:'未知',history:[]}}
 function clr(v,l,h){if(v==null)return'b';if(v>=h)return'r';if(v<=l)return'g';return'y'}
 var c1=null;try{c1=echarts.init(document.getElementById('ch1'))}catch(e){console.warn('ECharts init failed:',e)}
 function mkChart(dom,series){if(!dom)return;
@@ -340,20 +353,21 @@ async function renderNews(){
 async function render(){
   document.getElementById('clock').textContent=('0'+new Date().getHours()).slice(-2)+':'+('0'+new Date().getMinutes()).slice(-2);
   try{var d=await Promise.all([
-    get('/api/v1/signal/pe-percentile'),get('/api/v1/signal/erp'),get('/api/v1/signal/macro-score'),
-    get('/api/v1/signal/sector-breadth'),get('/api/v1/signal/panic-index'),get('/api/v1/signal/composite'),
-    get('/api/v1/signal/pe-percentile?days=180'),get('/api/v1/signal/sector-breadth?days=180'),
-    get('/api/v1/signal/composite?days=180'),get('/api/v1/signal/macro-score?days=180'),
-    get('/api/v1/signal/margin-sentiment'),get('/api/v1/signal/volume-score'),
-    get('/api/v1/signal/northbound-sentiment'),get('/api/v1/signal/lockup-pressure'),
-    get('/api/v1/signal/regime'),get('/api/v1/signal/liquidity-score'),
-    get('/api/v1/signal/fund-sentiment'),get('/api/v1/signal/cross-asset'),
-    get('/api/v1/signal/style-rotation'),get('/api/v1/signal/sector-crowding')
+    _g('/api/v1/signal/pe-percentile'),_g('/api/v1/signal/erp'),_g('/api/v1/signal/macro-score'),
+    _g('/api/v1/signal/sector-breadth'),_g('/api/v1/signal/panic-index'),_g('/api/v1/signal/composite'),
+    _g('/api/v1/signal/pe-percentile?days=180'),_g('/api/v1/signal/sector-breadth?days=180'),
+    _g('/api/v1/signal/composite?days=180'),_g('/api/v1/signal/macro-score?days=180'),
+    _g('/api/v1/signal/margin-sentiment'),_g('/api/v1/signal/volume-score'),
+    _g('/api/v1/signal/northbound-sentiment'),_g('/api/v1/signal/lockup-pressure'),
+    _g('/api/v1/signal/regime'),_g('/api/v1/signal/liquidity-score'),
+    _g('/api/v1/signal/fund-sentiment'),_g('/api/v1/signal/cross-asset'),
+    _g('/api/v1/signal/style-rotation'),_g('/api/v1/signal/sector-crowding')
   ]);
-  var pe=d[0],erp=d[1],mac=d[2],sec=d[3],pan=d[4],comp=d[5],
-      peH=d[6],sH=d[7],cH=d[8],mH=d[9],
-      margin=d[10],vol=d[11],nb=d[12],lockup=d[13],reg=d[14],
-      liq=d[15],fund=d[16],cross=d[17],style=d[18],crowd=d[19];
+  var pe=V(d[0]),erp=V(d[1]),mac=V(d[2]),sec=V(d[3]),pan=V(d[4]),comp=V(d[5]),
+      peH=V(d[6]),sH=V(d[7]),cH=V(d[8]),mH=V(d[9]),
+      margin=V(d[10]),vol=V(d[11]),nb=V(d[12]),lockup=V(d[13]),reg=V(d[14]),
+      liq=V(d[15]),fund=V(d[16]),cross=V(d[17]),style=V(d[18]),crowd=V(d[19]);
+  if(!d[0]&&!d[5]&&!d[4]&&!d[14]){throw Error('all null')}
   updateAiCtx(comp,pe,pan,reg,mac,vol,nb,margin)
   }catch(e){
     document.getElementById('hero').innerHTML='<div style="text-align:center;padding:40px"><div style="color:#e55050;font-size:15px;font-weight:600">无法连接 API</div><div style="font-size:12px;color:#555;margin-top:6px">请确认已启动服务</div></div>';
@@ -362,7 +376,8 @@ async function render(){
   }
 
   // Hero
-  var gc=gaugeColor(comp.value), gPct=comp.value/100;
+  var cv=typeof comp.value==='number'?comp.value:50;
+  var gc=gaugeColor(cv), gPct=cv/100;
   var r=52, circ=2*Math.PI*r, dashoff=circ*(1-gPct);
   document.getElementById('hero').innerHTML=
     '<div class="hero-wrap">'+
@@ -372,38 +387,38 @@ async function render(){
           '<circle cx="60" cy="60" r="'+r+'" fill="none" stroke="'+gc+'" stroke-width="7" stroke-dasharray="'+circ.toFixed(1)+'" stroke-dashoffset="'+dashoff.toFixed(1)+'" stroke-linecap="round"/>'+
         '</svg>'+
         '<div class="hero-val-wrap">'+
-          '<div class="hero-val" style="color:'+gc+'">'+comp.value+'</div>'+
+          '<div class="hero-val" style="color:'+gc+'">'+cv+'</div>'+
           '<div class="hero-sub">/100</div>'+
         '</div>'+
       '</div>'+
       '<div class="hero-info">'+
-        '<div class="hero-label">综合情绪 · '+comp.interpretation+'</div>'+
-        '<div class="hero-meta">市场状态: <b>'+reg.label+'</b> · '+comp.dimensions_valid+'/'+comp.dimensions_total+' 维有效 · 更新于 '+comp.as_of_date+'</div>'+
+        '<div class="hero-label">综合情绪 · '+(comp.interpretation||'')+'</div>'+
+        '<div class="hero-meta">市场状态: <b>'+(reg.label||'—')+'</b> · '+(comp.dimensions_valid||0)+'/'+(comp.dimensions_total||1)+' 维有效 · 更新于 '+(comp.as_of_date||'—')+'</div>'+
         '<div class="hero-bar-wrap">'+
           '<div class="hero-bar"></div>'+
-          '<div class="hero-marker" style="left:'+comp.value+'%;border-color:'+gc+'"></div>'+
+          '<div class="hero-marker" style="left:'+cv+'%;border-color:'+gc+'"></div>'+
         '</div>'+
         '<div class="hero-zones"><span>0 极度恐惧</span><span>25</span><span>50 中性</span><span>75</span><span>100 极度乐观</span></div>'+
         '<div class="hero-minis">'+
           '<div class="hero-mini" data-tip="当前市盈率在过去5年中的百分位。分位越高=越贵，低于20%=低估，高于80%=高估">'+
             '<div class="ml">估值温度</div>'+
-            '<div class="mv '+clr(pe.percentile,35,65)+'" style="color:'+gaugeColor(pe.percentile)+'">'+pe.percentile+'<span style="font-size:12px;font-weight:400">%</span></div>'+
-            '<div class="ms">PE '+pe.value+' · '+pe.interpretation+'</div>'+
+            '<div class="mv '+clr(pe.percentile,35,65)+'" style="color:'+gaugeColor(pe.percentile)+'">'+(pe.percentile||'—')+'<span style="font-size:12px;font-weight:400">%</span></div>'+
+            '<div class="ms">PE '+(pe.value||'—')+' · '+(pe.interpretation||'')+'</div>'+
           '</div>'+
           '<div class="hero-mini" data-tip="M2增速/PMI/CPI/隔夜利率/期限利差/汇率 6维归一化等权合成。高于50=宏观偏暖">'+
             '<div class="ml">宏观环境</div>'+
-            '<div class="mv" style="color:'+(mac.value>55?'#10b981':mac.value>40?'#f0a030':'#e55050')+'">'+mac.value+'<span style="font-size:12px;font-weight:400;color:#555">/100</span></div>'+
-            '<div class="ms">'+mac.interpretation+'</div>'+
+            '<div class="mv" style="color:'+(typeof mac.value==='number'?(mac.value>55?'#10b981':mac.value>40?'#f0a030':'#e55050'):'#555')+'">'+(mac.value||'—')+'<span style="font-size:12px;font-weight:400;color:#555">/100</span></div>'+
+            '<div class="ms">'+(mac.interpretation||'')+'</div>'+
           '</div>'+
           '<div class="hero-mini" data-tip="综合行业波动率+板块离散度+行业宽度。越高越恐慌，80+通常对应市场底部">'+
             '<div class="ml">恐慌指数</div>'+
-            '<div class="mv" style="color:'+(pan.color==='green'?'#10b981':pan.color==='yellow'?'#f0a030':'#e55050')+'">'+pan.value+'</div>'+
-            '<div class="ms">'+pan.level+'</div>'+
+            '<div class="mv" style="color:'+(pan.color==='green'?'#10b981':pan.color==='yellow'?'#f0a030':pan.color==='red'?'#e55050':'#555')+'">'+(pan.value||'—')+'</div>'+
+            '<div class="ms">'+(pan.level||'')+'</div>'+
           '</div>'+
           '<div class="hero-mini" data-tip="股权风险溢价(ERP)=1/PE−国债收益率。正值=股票相对债券便宜，>3%意味着显著低估">'+
             '<div class="ml">股债性价比</div>'+
-            '<div class="mv '+(erp.value>3?'g':erp.value>1?'y':'r')+'">'+erp.value+'<span style="font-size:12px;font-weight:400">%</span></div>'+
-            '<div class="ms">'+erp.earnings_yield+'% - '+erp.bond_yield_10y+'%</div>'+
+            '<div class="mv '+(typeof erp.value==='number'?(erp.value>3?'g':erp.value>1?'y':'r'):'')+'">'+(erp.value||'—')+'<span style="font-size:12px;font-weight:400">%</span></div>'+
+            '<div class="ms">'+(erp.earnings_yield||'—')+'% - '+(erp.bond_yield_10y||'—')+'%</div>'+
           '</div>'+
         '</div>'+
       '</div>'+
@@ -459,7 +474,7 @@ async function render(){
 
   // 行业热力图（CSS Grid，无 ECharts 依赖）
   try{
-    var sectors=await get('/api/v1/signal/sector-heatmap');
+    var sectors=await _g('/api/v1/signal/sector-heatmap');
     renderSectorHeatmap(sectors);
     // 行业明细
     var secs=(sectors.sectors||[]).sort(function(a,b){return b.momentum_60d-a.momentum_60d});
