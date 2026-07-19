@@ -170,7 +170,7 @@ body{background:#0f1119;color:#c9d1d9;font:13px/1.5 -apple-system,'Microsoft YaH
 .ai-inp button{width:34px;height:34px;border-radius:50%;background:#5b8def;color:#fff;border:none;cursor:pointer;font-size:14px;flex-shrink:0;display:flex;align-items:center;justify-content:center}
 .ai-inp button:disabled{opacity:.4;cursor:default}
 .ai-inp .hint{font-size:9px;color:#444;align-self:center}
-@media(max-width:768px){.grid{grid-template-columns:1fr}.hero-wrap{flex-direction:column;align-items:center;text-align:center}.hero-gauge{width:120px;height:120px}.hero-val{font-size:36px!important}.ch .cc{height:180px!important}#calList{grid-template-columns:1fr 1fr!important}}
+@media(max-width:768px){.grid{grid-template-columns:1fr!important}.hero-wrap{flex-direction:column;align-items:center;text-align:center}.hero-gauge{width:120px;height:120px}.hero-val{font-size:36px!important}.ch .cc{height:180px!important}#calList{grid-template-columns:1fr 1fr!important}#grid2{grid-template-columns:1fr 1fr!important}#sectorGrid{grid-template-columns:1fr!important}}
 @media(max-width:480px){.ai-panel{right:8px;left:8px;width:auto;bottom:76px;max-height:60vh}.ai-btn{right:8px;bottom:16px}.hero-wrap{flex-direction:column;align-items:center;text-align:center}.hero-minis{grid-template-columns:1fr 1fr}.hero-val{font-size:30px!important}.c{padding:12px 8px}.hdr{flex-wrap:wrap}}
 </style>
 </head>
@@ -201,7 +201,7 @@ body{background:#0f1119;color:#c9d1d9;font:13px/1.5 -apple-system,'Microsoft YaH
 <div id="tabContent">
 <!-- 卡片网格 -->
 <div class="grid" id="grid"></div>
-<div class="grid" id="grid2"></div>
+<div class="grid" id="grid2" style="grid-template-columns:repeat(3,1fr)"></div>
 
 <!-- 相似期 + 新闻 -->
 <div class="ch" id="simBox"><div class="ct">📊 历史相似期 · 当前综合情绪最接近的 5 天</div><div id="simList" style="color:#8b8fa3;padding:4px 0"></div></div>
@@ -235,8 +235,9 @@ body{background:#0f1119;color:#c9d1d9;font:13px/1.5 -apple-system,'Microsoft YaH
     <span style="margin-left:12px">🔵=进攻型</span><span>🛡️=防御型</span><span>⚪=其他</span>
   </div>
 </div>
+<div class="grid" id="sectorGrid" style="grid-template-columns:repeat(3,1fr)"></div>
+
 <div class="ch" style="height:260px" id="heatmapChart"></div>
-<div class="grid" id="sectorGrid"></div>
 
 <!-- 宏观日历 -->
 </div><!-- /tabContent -->
