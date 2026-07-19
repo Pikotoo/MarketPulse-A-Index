@@ -1,0 +1,45 @@
+[project]
+name = "marketpulse"
+version = "2.1.0"
+description = "A股市场情绪量化框架 — 21个信号端点，7维综合评分"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+authors = [
+    {name = "MarketPulse Authors"}
+]
+keywords = ["a-share", "quantitative", "market-sentiment", "financial-data", "china-stock"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+
+dependencies = [
+    "flask>=3.0",
+    "pandas>=2.0",
+    "numpy>=1.24",
+    "feedparser>=6.0",
+    "akshare>=1.14",
+    "requests>=2.31",
+    "gunicorn>=21.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/<user>/MarketPulse"
+Issues = "https://github.com/<user>/MarketPulse/issues"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["api", "api.signals", "scripts"]

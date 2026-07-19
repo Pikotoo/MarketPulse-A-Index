@@ -1,0 +1,21 @@
+# MarketPulse API — systemd 服务文件
+# 部署于香港服务器 /etc/systemd/system/marketpulse.service
+
+[Unit]
+Description=MarketPulse — A股市场信号指标 API
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/root/marketpulse
+Environment="DATA_ROOT=/data/api-data"
+Environment="API_PORT=8898"
+ExecStart=/usr/bin/python3 -m gunicorn -w 4 -b 0.0.0.0:8898 api.app:app
+Restart=always
+RestartSec=5
+StandardOutput=append:/var/log/marketpulse.log
+StandardError=append:/var/log/marketpulse_error.log
+
+[Install]
+WantedBy=multi-user.target

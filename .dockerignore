@@ -1,0 +1,39 @@
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+
+# 数据
+data_source/
+data/
+backups/
+*.db
+*.db-*
+
+# 环境
+.env
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore
+
+# 日志
+logs/
+*.log
+
+# 操作系统
+.DS_Store
+Thumbs.db

@@ -1,0 +1,18 @@
+services:
+  marketpulse:
+    build: .
+    container_name: marketpulse
+    ports:
+      - "8898:8898"
+    environment:
+      - DATA_ROOT=/app/data_source
+      - API_PORT=8898
+      - API_HOST=0.0.0.0
+    volumes:
+      - marketpulse_data:/app/data_source
+      - marketpulse_db:/app/data
+    restart: unless-stopped
+
+volumes:
+  marketpulse_data:
+  marketpulse_db:

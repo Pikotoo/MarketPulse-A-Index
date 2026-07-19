@@ -1,0 +1,11 @@
+# MarketPulse — A股市场信号指标 API
+# Python 3.11+
+
+flask>=3.0
+pandas>=2.0
+numpy>=1.24
+feedparser>=6.0
+akshare>=1.14
+requests>=2.31
+gunicorn>=21.2
+pytest>=8.0
