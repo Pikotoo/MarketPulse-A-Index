@@ -72,14 +72,15 @@ from api.audit import audit_trail, init_audit_db
 from api.cache import init_cache_db
 from config import API_PORT, API_HOST, API_VERSION, DISCLAIMER
 
-# ── NumPy JSON 编码支持 ─────────────────────────────────
+# ── NumPy JSON 编码支持 (Flask 3.0+) ─────────────────────
 
 try:
     import numpy as np
-    import json as _json
+    from flask.json.provider import DefaultJSONProvider
 
-    class _NumpyEncoder(_json.JSONEncoder):
-        def default(self, obj):
+    class _NumpyJSONProvider(DefaultJSONProvider):
+        @staticmethod
+        def default(obj):
             if isinstance(obj, (np.integer,)):
                 return int(obj)
             if isinstance(obj, (np.floating,)):
@@ -88,10 +89,10 @@ try:
                 return obj.tolist()
             if isinstance(obj, (np.bool_,)):
                 return bool(obj)
-            return super().default(obj)
+            return super(_NumpyJSONProvider, _NumpyJSONProvider).default(obj)
 
     app = Flask(__name__)
-    app.json_encoder = _NumpyEncoder
+    app.json_provider_class = _NumpyJSONProvider
 except ImportError:
     app = Flask(__name__)
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -232,27 +233,66 @@ def endpoints():
              "description": "服务健康检查 + 数据新鲜度"},
             {"method": "GET", "path": "/api/v1/endpoints", "auth_required": False,
              "description": "可用端点列表"},
-
+            # 估值
             {"method": "GET", "path": "/api/v1/signal/pe-percentile", "auth_required": True,
-             "params": "?days=N", "description": "全市场PE分位 (0-100)"},
+             "params": "?days=N", "description": "PE分位 (0-100)"},
             {"method": "GET", "path": "/api/v1/signal/erp", "auth_required": True,
              "params": "?days=N", "description": "股权风险溢价 (%)"},
+            # 宏观/情绪
             {"method": "GET", "path": "/api/v1/signal/macro-score", "auth_required": True,
              "params": "?days=N", "description": "宏观综合评分 (0-100)"},
             {"method": "GET", "path": "/api/v1/signal/panic-index", "auth_required": True,
              "params": "?days=N", "description": "恐慌指数 (0-100)"},
+            {"method": "GET", "path": "/api/v1/signal/composite", "auth_required": True,
+             "params": "?days=N", "description": "综合情绪分 (0-100)"},
+            {"method": "GET", "path": "/api/v1/signal/regime", "auth_required": True,
+             "description": "市场状态判定"},
+            # 行业/风格
             {"method": "GET", "path": "/api/v1/signal/sector-breadth", "auth_required": True,
              "params": "?days=N", "description": "行业宽度 — 站上MA60比例"},
-            {"method": "GET", "path": "/api/v1/signal/defensive-ratio", "auth_required": True,
-             "description": "防御/进攻比"},
             {"method": "GET", "path": "/api/v1/signal/sector-momentum", "auth_required": True,
              "params": "?days=N", "description": "行业动量 — 32行业涨跌排名"},
+            {"method": "GET", "path": "/api/v1/signal/sector-heatmap", "auth_required": True,
+             "description": "行业热力图数据"},
+            {"method": "GET", "path": "/api/v1/signal/sector-crowding", "auth_required": True,
+             "params": "?days=N", "description": "行业拥挤度"},
+            {"method": "GET", "path": "/api/v1/signal/style-rotation", "auth_required": True,
+             "params": "?days=N", "description": "风格轮动"},
+            {"method": "GET", "path": "/api/v1/signal/defensive-ratio", "auth_required": True,
+             "description": "防御/进攻比"},
+            # 资金面
+            {"method": "GET", "path": "/api/v1/signal/margin-sentiment", "auth_required": True,
+             "params": "?days=N", "description": "融资融券情绪分"},
+            {"method": "GET", "path": "/api/v1/signal/northbound-sentiment", "auth_required": True,
+             "params": "?days=N", "description": "北向资金情绪分"},
+            {"method": "GET", "path": "/api/v1/signal/volume-score", "auth_required": True,
+             "params": "?days=N", "description": "量能活跃度"},
+            {"method": "GET", "path": "/api/v1/signal/liquidity-score", "auth_required": True,
+             "params": "?days=N", "description": "流动性评分"},
+            {"method": "GET", "path": "/api/v1/signal/fund-sentiment", "auth_required": True,
+             "params": "?days=N", "description": "资金情绪综合"},
+            {"method": "GET", "path": "/api/v1/signal/lockup-pressure", "auth_required": True,
+             "params": "?days=N", "description": "限售解禁压力"},
+            # 市场宽度/跨资产
             {"method": "GET", "path": "/api/v1/signal/advance-decline", "auth_required": True,
              "params": "?days=N", "description": "涨跌比 — 上涨vs下跌行业数"},
             {"method": "GET", "path": "/api/v1/signal/new-high-low", "auth_required": True,
              "params": "?days=N", "description": "新高新低 — 创60日新高/新低行业数"},
-            {"method": "GET", "path": "/api/v1/signal/composite", "auth_required": True,
-             "params": "?days=N", "description": "综合情绪分 (0-100)"},
+            {"method": "GET", "path": "/api/v1/signal/cross-asset", "auth_required": True,
+             "params": "?days=N", "description": "跨资产对比"},
+            # 工具
+            {"method": "GET", "path": "/api/v1/tool/pe-calculator", "auth_required": True,
+             "params": "?pe=12.5", "description": "PE估值计算器"},
+            {"method": "GET", "path": "/api/v1/tool/similar-period", "auth_required": True,
+             "params": "?n=5", "description": "历史相似期查找"},
+            {"method": "GET", "path": "/api/v1/calendar/upcoming", "auth_required": True,
+             "description": "宏观经济日历·未来"},
+            {"method": "GET", "path": "/api/v1/calendar/history", "auth_required": True,
+             "description": "宏观经济日历·历史"},
+            {"method": "GET", "path": "/api/v1/news/latest", "auth_required": True,
+             "description": "市场要闻"},
+            {"method": "POST", "path": "/api/v1/ai/chat", "auth_required": True,
+             "params": '{"question":"..."}', "description": "AI数据助手 (DeepSeek)"},
         ],
         "disclaimer": DISCLAIMER,
     })

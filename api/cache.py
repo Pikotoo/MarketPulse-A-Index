@@ -3,22 +3,27 @@
 
 每日凌晨批量计算所有指标并缓存到 SQLite。
 API 请求优先读缓存，缓存未命中时实时计算并回写。
-
-表结构:
-  signal_cache:
-    indicator   TEXT    — 指标名
-    calc_date   TEXT    — 计算基准日期 (YYYY-MM-DD)
-    data_json   TEXT    — 完整 API 响应 JSON
-    cached_at   TEXT    — 缓存写入时间
-    PRIMARY KEY (indicator, calc_date)
 """
 
 import json
 import sqlite3
-from datetime import date
+from datetime import date, timedelta
 from typing import Optional
 
 from config import DB_PATH
+
+
+def _json_default(obj):
+    """JSON序列化：正确处理numpy数值类型"""
+    try:
+        import numpy as np
+        if isinstance(obj, (np.integer,)): return int(obj)
+        if isinstance(obj, (np.floating,)): return float(obj)
+        if isinstance(obj, (np.ndarray,)): return obj.tolist()
+        if isinstance(obj, (np.bool_,)): return bool(obj)
+    except ImportError:
+        pass
+    return str(obj)
 
 
 def _db():
@@ -66,16 +71,28 @@ def get_cached(indicator: str, calc_date: Optional[str] = None) -> Optional[dict
 
 
 def set_cache(indicator: str, data: dict, calc_date: Optional[str] = None):
-    """写缓存"""
+    """写缓存 — 正确处理numpy数值类型"""
     if calc_date is None:
         calc_date = date.today().isoformat()
     conn = _db()
     conn.execute(
-        "INSERT OR REPLACE INTO signal_cache (indicator,calc_date,data_json,cached_at) VALUES (?,?,?,datetime('now','localtime'))",
-        (indicator, calc_date, json.dumps(data, ensure_ascii=False, default=str))
+        "INSERT OR REPLACE INTO signal_cache (indicator,calc_date,data_json,cached_at) "
+        "VALUES (?,?,?,datetime('now','localtime'))",
+        (indicator, calc_date, json.dumps(data, ensure_ascii=False, default=_json_default))
     )
     conn.commit()
     conn.close()
+
+
+def clean_old_cache(days: int = 365):
+    """清理N天前的旧缓存，防止数据库膨胀"""
+    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    conn = _db()
+    conn.execute("DELETE FROM signal_cache WHERE calc_date < ?", (cutoff,))
+    deleted = conn.total_changes
+    conn.commit()
+    conn.close()
+    return deleted
 
 
 def is_fresh(indicator: str) -> bool:
