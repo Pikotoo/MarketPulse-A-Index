@@ -339,19 +339,22 @@ async function renderNews(){
 
 async function render(){
   document.getElementById('clock').textContent=('0'+new Date().getHours()).slice(-2)+':'+('0'+new Date().getMinutes()).slice(-2);
-  try{var pe=await get('/api/v1/signal/pe-percentile'),erp=await get('/api/v1/signal/erp'),mac=await get('/api/v1/signal/macro-score'),
-    sec=await get('/api/v1/signal/sector-breadth'),pan=await get('/api/v1/signal/panic-index'),comp=await get('/api/v1/signal/composite'),
-    peH=await get('/api/v1/signal/pe-percentile?days=180'),sH=await get('/api/v1/signal/sector-breadth?days=180'),
-    cH=await get('/api/v1/signal/composite?days=180'),mH=await get('/api/v1/signal/macro-score?days=180'),
-    margin=await get('/api/v1/signal/margin-sentiment'),vol=await get('/api/v1/signal/volume-score'),
-    nb=await get('/api/v1/signal/northbound-sentiment'),lockup=await get('/api/v1/signal/lockup-pressure'),
-    reg=await get('/api/v1/signal/regime');
-    liq=await get('/api/v1/signal/liquidity-score'),
-    fund=await get('/api/v1/signal/fund-sentiment'),
-    cross=await get('/api/v1/signal/cross-asset'),
-    style=await get('/api/v1/signal/style-rotation'),
-    crowd=await get('/api/v1/signal/sector-crowding');
-    updateAiCtx(comp,pe,pan,reg,mac,vol,nb,margin)
+  try{var d=await Promise.all([
+    get('/api/v1/signal/pe-percentile'),get('/api/v1/signal/erp'),get('/api/v1/signal/macro-score'),
+    get('/api/v1/signal/sector-breadth'),get('/api/v1/signal/panic-index'),get('/api/v1/signal/composite'),
+    get('/api/v1/signal/pe-percentile?days=180'),get('/api/v1/signal/sector-breadth?days=180'),
+    get('/api/v1/signal/composite?days=180'),get('/api/v1/signal/macro-score?days=180'),
+    get('/api/v1/signal/margin-sentiment'),get('/api/v1/signal/volume-score'),
+    get('/api/v1/signal/northbound-sentiment'),get('/api/v1/signal/lockup-pressure'),
+    get('/api/v1/signal/regime'),get('/api/v1/signal/liquidity-score'),
+    get('/api/v1/signal/fund-sentiment'),get('/api/v1/signal/cross-asset'),
+    get('/api/v1/signal/style-rotation'),get('/api/v1/signal/sector-crowding')
+  ]);
+  var pe=d[0],erp=d[1],mac=d[2],sec=d[3],pan=d[4],comp=d[5],
+      peH=d[6],sH=d[7],cH=d[8],mH=d[9],
+      margin=d[10],vol=d[11],nb=d[12],lockup=d[13],reg=d[14],
+      liq=d[15],fund=d[16],cross=d[17],style=d[18],crowd=d[19];
+  updateAiCtx(comp,pe,pan,reg,mac,vol,nb,margin)
   }catch(e){
     document.getElementById('hero').innerHTML='<div style="text-align:center;padding:40px"><div style="color:#e55050;font-size:15px;font-weight:600">无法连接 API</div><div style="font-size:12px;color:#555;margin-top:6px">请确认已启动服务</div></div>';
     hideLoading();
